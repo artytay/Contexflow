@@ -48,16 +48,30 @@ const state = {
 
   // Notion Grounding Sources & Vault Blocks
   selectedNotionSources: [],
+  generatorNotionSources: [],
+  candidateVaultBlocks: [],
+  selectedCandidateIds: new Set(),
+  vaultTabs: [
+    { name: 'Working Style & Skills', color: 'blue' },
+    { name: 'Limits & Health', color: 'red' },
+    { name: 'Personality & Traits', color: 'purple' },
+    { name: 'Custom Directives', color: 'green' }
+  ],
   vaultBlocks: [],
   vaultHeadingGroups: {},
   vaultBlocksFilter: 'all',
   vaultViewMode: 'blocks',
   activeVaultTab: 'Working Style & Skills',
-  draggedBlockId: null
+  draggedBlockId: null,
+
+  // Change Notes & Backlog
+  changeNotes: [],
+  notesFilter: 'all'
 };
 
 // DOM Elements
 const el = {
+  saveStateIndicator: document.getElementById('save-state-indicator'),
   workflowTabs: document.getElementById('workflow-tabs'),
   categoryChips: document.getElementById('category-chips'),
   toggleGroupedHubBtn: document.getElementById('toggle-grouped-hub-btn'),
@@ -85,6 +99,7 @@ const el = {
   expandedFromBadge: document.getElementById('expanded-from-badge'),
   parentSetName: document.getElementById('parent-set-name'),
   openNotionSetLink: document.getElementById('open-notion-set-link'),
+  deleteCurrentSetBtn: document.getElementById('delete-current-set-btn'),
   addSimilarQuestionBtn: document.getElementById('add-similar-question-btn'),
   generateHintsBtn: document.getElementById('generate-hints-btn'),
   questionContextBox: document.getElementById('question-context-box'),
@@ -95,6 +110,12 @@ const el = {
   syncOverlayTitle: document.getElementById('sync-overlay-title'),
   syncOverlayDesc: document.getElementById('sync-overlay-desc'),
   syncCountdownTimer: document.getElementById('sync-countdown-timer'),
+
+  // Bottom Set Management Bar
+  setManagementBar: document.getElementById('set-management-bar'),
+  managementBarSetName: document.getElementById('management-bar-set-name'),
+  deleteSetBarBtn: document.getElementById('delete-set-bar-btn'),
+  deleteSetNameLabel: document.getElementById('delete-set-name-label'),
 
   // Output
   outputTitle: document.getElementById('output-title'),
@@ -119,6 +140,11 @@ const el = {
   vaultBtn: document.getElementById('vault-btn'),
   vaultModal: document.getElementById('vault-modal'),
   closeVaultModal: document.getElementById('close-vault-modal'),
+  vaultTabsList: document.getElementById('vault-tabs-list'),
+  addVaultTabBtn: document.getElementById('add-vault-tab-btn'),
+  activeVaultTabTitle: document.getElementById('active-vault-tab-title'),
+  renameActiveTabBtn: document.getElementById('rename-active-tab-btn'),
+  deleteActiveTabBtn: document.getElementById('delete-active-tab-btn'),
   saveVaultBtn: document.getElementById('save-vault-btn'),
   loadSampleVaultBtn: document.getElementById('load-sample-vault-btn'),
   compileVaultNotionBtn: document.getElementById('compile-vault-notion-btn'),
@@ -140,10 +166,33 @@ const el = {
   notionSearchResults: document.getElementById('notion-search-results'),
   selectedSourcesChips: document.getElementById('selected-sources-chips'),
   generateVaultBlocksBtn: document.getElementById('generate-vault-blocks-btn'),
+  vaultCandidateStagingBox: document.getElementById('vault-candidate-staging-box'),
+  candidateCount: document.getElementById('candidate-count'),
+  selectAllCandidatesBtn: document.getElementById('select-all-candidates-btn'),
+  dismissCandidatesBtn: document.getElementById('dismiss-candidates-btn'),
+  candidateBlocksList: document.getElementById('candidate-blocks-list'),
+  selectedCandidatesTally: document.getElementById('selected-candidates-tally'),
+  approveCandidatesBtn: document.getElementById('approve-candidates-btn'),
   vaultBlocksOrganizer: document.getElementById('vault-blocks-organizer'),
   vaultBlocksFilter: document.getElementById('vault-blocks-filter'),
   toggleVaultViewModeBtn: document.getElementById('toggle-vault-view-mode-btn'),
   addVaultHeadingBtn: document.getElementById('add-vault-heading-btn'),
+
+  // Change Notes Modal
+  notesBtn: document.getElementById('notes-btn'),
+  notesBadge: document.getElementById('notes-badge'),
+  notesModal: document.getElementById('notes-modal'),
+  closeNotesModal: document.getElementById('close-notes-modal'),
+  closeNotesModalFooter: document.getElementById('close-notes-modal-footer'),
+  newNoteTitle: document.getElementById('new-note-title'),
+  newNoteCategory: document.getElementById('new-note-category'),
+  newNotePriority: document.getElementById('new-note-priority'),
+  newNoteDetails: document.getElementById('new-note-details'),
+  addNoteBtn: document.getElementById('add-note-btn'),
+  notesList: document.getElementById('notes-list'),
+  copyNotesForAgentBtn: document.getElementById('copy-notes-for-agent-btn'),
+  clearCompletedNotesBtn: document.getElementById('clear-completed-notes-btn'),
+  notesStatusText: document.getElementById('notes-status-text'),
 
   // Custom Generator Modal
   customGeneratorBtn: document.getElementById('custom-generator-btn'),
@@ -153,6 +202,14 @@ const el = {
   generatorNumQuestions: document.getElementById('generator-num-questions'),
   runGeneratorBtn: document.getElementById('run-generator-btn'),
   genSpinner: document.getElementById('gen-spinner'),
+  toggleGenNotionSourcesBtn: document.getElementById('toggle-gen-notion-sources-btn'),
+  genSelectedSourcesCount: document.getElementById('gen-selected-sources-count'),
+  genNotionSourcesPanel: document.getElementById('gen-notion-sources-panel'),
+  genNotionSearchInput: document.getElementById('gen-notion-search-input'),
+  genNotionSearchBtn: document.getElementById('gen-notion-search-btn'),
+  genNotionSearchResults: document.getElementById('gen-notion-search-results'),
+  genSelectedSourcesChips: document.getElementById('gen-selected-sources-chips'),
+  genNoSourcesText: document.getElementById('gen-no-sources-text'),
 
   // Payload Modal
   payloadModal: document.getElementById('payload-modal'),
@@ -181,7 +238,28 @@ async function init() {
   renderCurrentQuestion();
   setupEventListeners();
   updateHistoryUI();
+  await loadChangeNotes();
   await loadNotionWorkflows();
+
+  // Validate that active workflow exists in state; if not, fallback safely
+  if (!state.workflows[state.activeWorkflowId]) {
+    const firstKey = Object.keys(state.workflows)[0];
+    if (firstKey) {
+      state.activeWorkflowId = firstKey;
+      state.currentIndex = 0;
+    }
+  }
+
+  // Ensure current question index is within range of active workflow
+  const activeWf = state.workflows[state.activeWorkflowId];
+  if (activeWf && activeWf.questions) {
+    if (state.currentIndex >= activeWf.questions.length) {
+      state.currentIndex = 0;
+    }
+  }
+
+  renderWorkflowTabs();
+  renderCurrentQuestion();
 }
 
 // Fetch live Question Sets from Notion databases
@@ -228,8 +306,65 @@ async function checkServerConfig() {
   }
 }
 
+// Save full application UI state to localStorage with visual indicator
+let saveStateDebounceTimer = null;
+function persistAppState() {
+  clearTimeout(saveStateDebounceTimer);
+  saveStateDebounceTimer = setTimeout(() => {
+    try {
+      const stateToSave = {
+        activeWorkflowId: state.activeWorkflowId,
+        activeCategory: state.activeCategory,
+        currentIndex: state.currentIndex,
+        answers: state.answers,
+        vaultViewMode: state.vaultViewMode,
+        activeVaultTab: state.activeVaultTab,
+        vaultHeadingGroups: state.vaultHeadingGroups,
+        vaultBlocksFilter: state.vaultBlocksFilter
+      };
+      localStorage.setItem('contextflow_app_state', JSON.stringify(stateToSave));
+
+      if (el.saveStateIndicator) {
+        el.saveStateIndicator.innerHTML = '<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#10b981;"></span> Saved';
+        el.saveStateIndicator.style.opacity = '1';
+      }
+    } catch (e) {
+      console.warn('Failed to persist app state:', e);
+    }
+  }, 250);
+}
+
 // Storage helpers
 function loadStoredSettings() {
+  // Purge any local workflows previously deleted by the user
+  try {
+    const deletedList = JSON.parse(localStorage.getItem('contextflow_deleted_workflows') || '[]');
+    deletedList.forEach(id => {
+      delete state.workflows[id];
+      delete state.answers[id];
+    });
+  } catch (e) {
+    console.warn('Failed to parse deleted workflows list', e);
+  }
+
+  // Restore persistent application state (active workflow, answers, question index, categories)
+  const savedAppState = localStorage.getItem('contextflow_app_state');
+  if (savedAppState) {
+    try {
+      const parsedState = JSON.parse(savedAppState);
+      if (parsedState.answers) state.answers = parsedState.answers;
+      if (parsedState.activeCategory) state.activeCategory = parsedState.activeCategory;
+      if (parsedState.activeWorkflowId) state.activeWorkflowId = parsedState.activeWorkflowId;
+      if (typeof parsedState.currentIndex === 'number') state.currentIndex = parsedState.currentIndex;
+      if (parsedState.vaultViewMode) state.vaultViewMode = parsedState.vaultViewMode;
+      if (parsedState.activeVaultTab) state.activeVaultTab = parsedState.activeVaultTab;
+      if (parsedState.vaultHeadingGroups) state.vaultHeadingGroups = parsedState.vaultHeadingGroups;
+      if (parsedState.vaultBlocksFilter) state.vaultBlocksFilter = parsedState.vaultBlocksFilter;
+    } catch (e) {
+      console.warn('Failed to parse saved app state:', e);
+    }
+  }
+
   const savedVault = localStorage.getItem('contextflow_vault');
   if (savedVault) {
     try {
@@ -348,6 +483,7 @@ function renderCategoryChips() {
       state.activeCategory = cat;
       renderCategoryChips();
       renderWorkflowTabs();
+      persistAppState();
     });
     el.categoryChips.appendChild(chip);
   });
@@ -390,9 +526,12 @@ function renderGroupedSetsHub() {
           <div class="grouped-set-name">${wf.isNotion ? '<span style="color:#a78bfa; margin-right:3px;">❖</span>' : ''}${escapeHtml(wf.name)}</div>
           <span class="status-pill ${statusPillClass}" style="font-size:0.65rem; padding:1px 6px;">${progress.pillText}</span>
         </div>
-        <div class="grouped-set-status-row">
+        <div class="grouped-set-status-row" style="display: flex; justify-content: space-between; align-items: center;">
           <span class="set-progress-text">${progress.label}</span>
-          ${wf.isNotion && wf.notionUrl ? `<a href="${wf.notionUrl}" target="_blank" rel="noopener" class="text-xs" style="color:#a78bfa; text-decoration:none;" onclick="event.stopPropagation();">Notion ↗</a>` : ''}
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
+            ${wf.isNotion && wf.notionUrl ? `<a href="${wf.notionUrl}" target="_blank" rel="noopener" class="text-xs" style="color:#a78bfa; text-decoration:none;" onclick="event.stopPropagation();">Notion ↗</a>` : ''}
+            ${wf.isNotion ? `<button class="delete-set-card-btn" data-wf-id="${wf.id}" title="Delete Question Set" style="background: none; border: none; cursor: pointer; color: #ef4444; font-size: 0.85rem; padding: 0 2px;" onclick="event.stopPropagation();">🗑️</button>` : ''}
+          </div>
         </div>
       `;
 
@@ -400,6 +539,14 @@ function renderGroupedSetsHub() {
         switchWorkflow(wf.id);
         if (el.groupedSetsHub) el.groupedSetsHub.classList.add('hidden');
       });
+
+      const delBtn = card.querySelector('.delete-set-card-btn');
+      if (delBtn) {
+        delBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          deleteQuestionSet(wf.id);
+        });
+      }
 
       col.appendChild(card);
     });
@@ -439,6 +586,14 @@ function renderWorkflowTabs() {
   renderGroupedSetsHub();
 }
 
+function getActiveRawTextarea() {
+  if (state.activeVaultTab === 'Working Style & Skills') return el.vaultSkills;
+  if (state.activeVaultTab === 'Limits & Health') return el.vaultLimits;
+  if (state.activeVaultTab === 'Personality & Traits') return el.vaultPersonality;
+  if (state.activeVaultTab === 'Custom Directives') return el.vaultCustomDoc;
+  return el.vaultSkills;
+}
+
 // Switch Active Workflow
 function switchWorkflow(workflowId) {
   if (state.activeWorkflowId === workflowId) return;
@@ -459,6 +614,7 @@ function switchWorkflow(workflowId) {
   el.outputView.classList.add('hidden');
 
   renderCurrentQuestion();
+  persistAppState();
 }
 
 // Current Workflow & Question Getters
@@ -517,6 +673,13 @@ function renderCurrentQuestion() {
   } else if (el.notionContextBanner) {
     el.notionContextBanner.classList.add('hidden');
     if (el.addSimilarQuestionBtn) el.addSimilarQuestionBtn.classList.add('hidden');
+  }
+
+  // Update Bottom Set Management Bar
+  if (el.setManagementBar) {
+    const currentName = wf.fullName || wf.name;
+    if (el.managementBarSetName) el.managementBarSetName.textContent = currentName;
+    if (el.deleteSetNameLabel) el.deleteSetNameLabel.textContent = `"${wf.name}"`;
   }
 
   // Update Workflow Progress Pill & Remaining Counter in active workflow view
@@ -581,6 +744,9 @@ function renderCurrentQuestion() {
     input.id = 'answer-input';
     input.placeholder = q.placeholder || 'Type your answer...';
     input.value = currentVal || '';
+    input.addEventListener('input', () => {
+      saveCurrentAnswer();
+    });
     el.inputContainer.appendChild(input);
     setTimeout(() => input.focus(), 50);
 
@@ -592,6 +758,9 @@ function renderCurrentQuestion() {
     textarea.rows = 4;
     textarea.placeholder = q.placeholder || 'Enter details...';
     textarea.value = currentVal || '';
+    textarea.addEventListener('input', () => {
+      saveCurrentAnswer();
+    });
     el.inputContainer.appendChild(textarea);
     setTimeout(() => textarea.focus(), 50);
   }
@@ -776,6 +945,7 @@ function renderFlexibleChoiceQuestion(q, currentVal) {
       mode: currentMode,
       values: values
     });
+    saveCurrentAnswer();
   }
 
   // Mode button events
@@ -917,6 +1087,7 @@ function saveCurrentAnswer() {
     const values = Array.from(selectedCards).map(c => c.dataset.optionText);
     state.answers[state.activeWorkflowId][q.id] = values;
   }
+  persistAppState();
 }
 
 // Next Question Handler
@@ -948,6 +1119,7 @@ function handleNext() {
 
     state.currentIndex++;
     renderCurrentQuestion();
+    persistAppState();
   } else {
     submitQuestionnaire();
   }
@@ -959,6 +1131,7 @@ function handlePrev() {
     saveCurrentAnswer();
     state.currentIndex--;
     renderCurrentQuestion();
+    persistAppState();
   }
 }
 
@@ -1649,6 +1822,141 @@ function downloadMarkdownFile() {
 // NOTION GROUNDING ARTIFACTS & MASTER VAULT BLOCKS
 // ==========================================
 
+async function loadVaultTabs() {
+  try {
+    const res = await fetch('/api/notion/vault-tabs');
+    if (res.ok) {
+      const data = await res.json();
+      if (data.tabs && data.tabs.length > 0) {
+        state.vaultTabs = data.tabs;
+      }
+    }
+  } catch (err) {
+    console.warn('Could not load Notion vault tabs:', err);
+  }
+  renderVaultTabsUI();
+}
+
+function renderVaultTabsUI() {
+  if (!el.vaultTabsList) return;
+  el.vaultTabsList.innerHTML = '';
+
+  state.vaultTabs.forEach(tab => {
+    const btn = document.createElement('button');
+    btn.className = `vault-tab ${tab.name === state.activeVaultTab ? 'active' : ''}`;
+    btn.textContent = tab.name;
+    btn.dataset.tabName = tab.name;
+
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.vault-tab').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+
+      state.activeVaultTab = tab.name;
+      if (el.activeVaultTabTitle) {
+        el.activeVaultTabTitle.textContent = tab.name;
+      }
+
+      if (state.vaultViewMode === 'raw') {
+        document.querySelectorAll('.vault-panel').forEach(p => p.classList.add('hidden'));
+        const rawArea = getActiveRawTextarea();
+        if (rawArea && rawArea.parentElement) {
+          rawArea.parentElement.classList.remove('hidden');
+        }
+      }
+
+      loadVaultBlocks(tab.name);
+    });
+
+    el.vaultTabsList.appendChild(btn);
+  });
+}
+
+async function createNewVaultTab() {
+  const name = prompt('Enter a name for the new Vault Tab (e.g. "Core Philosophies", "Financial Targets", "Diet & Wellness"):');
+  if (!name || !name.trim()) return;
+  const cleanName = name.trim();
+
+  if (state.vaultTabs.some(t => t.name.toLowerCase() === cleanName.toLowerCase())) {
+    alert(`A tab named "${cleanName}" already exists.`);
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/notion/vault-tabs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'create', tabName: cleanName })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to create tab in Notion');
+
+    state.vaultTabs = data.tabs || [...state.vaultTabs, { name: cleanName, color: 'blue' }];
+    state.activeVaultTab = cleanName;
+    if (el.activeVaultTabTitle) el.activeVaultTabTitle.textContent = cleanName;
+
+    renderVaultTabsUI();
+    loadVaultBlocks(cleanName);
+  } catch (err) {
+    alert(`Error creating tab in Notion: ${err.message}`);
+  }
+}
+
+async function renameActiveVaultTab() {
+  const oldName = state.activeVaultTab;
+  const newName = prompt(`Rename tab "${oldName}" to:`, oldName);
+  if (!newName || !newName.trim() || newName.trim() === oldName) return;
+  const cleanNewName = newName.trim();
+
+  try {
+    const res = await fetch('/api/notion/vault-tabs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'rename', tabName: oldName, newTabName: cleanNewName })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to rename tab in Notion');
+
+    state.vaultTabs = data.tabs;
+    state.activeVaultTab = cleanNewName;
+    if (el.activeVaultTabTitle) el.activeVaultTabTitle.textContent = cleanNewName;
+
+    renderVaultTabsUI();
+    loadVaultBlocks(cleanNewName);
+  } catch (err) {
+    alert(`Error renaming tab in Notion: ${err.message}`);
+  }
+}
+
+async function deleteActiveVaultTab() {
+  const tabName = state.activeVaultTab;
+  if (state.vaultTabs.length <= 1) {
+    alert('You must keep at least one tab in your Master Profile & Context Vault.');
+    return;
+  }
+
+  const isConfirmed = confirm(`Are you sure you want to delete tab "${tabName}"?\n\nThis will remove the tab option and archive all of its context blocks in your Notion database.`);
+  if (!isConfirmed) return;
+
+  try {
+    const res = await fetch('/api/notion/vault-tabs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'delete', tabName: tabName })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to delete tab in Notion');
+
+    state.vaultTabs = data.tabs;
+    state.activeVaultTab = state.vaultTabs[0]?.name || 'Working Style & Skills';
+    if (el.activeVaultTabTitle) el.activeVaultTabTitle.textContent = state.activeVaultTab;
+
+    renderVaultTabsUI();
+    loadVaultBlocks(state.activeVaultTab);
+  } catch (err) {
+    alert(`Error deleting tab in Notion: ${err.message}`);
+  }
+}
+
 async function loadVaultBlocks(tab = 'Working Style & Skills') {
   try {
     state.activeVaultTab = tab;
@@ -1682,9 +1990,19 @@ function syncBlocksToText() {
     fullText += '\n';
   }
 
-  if (el.vaultSkills && state.activeVaultTab === 'Working Style & Skills') {
-    el.vaultSkills.value = fullText.trim();
-    state.vault.skills_and_work = fullText.trim();
+  const trimmed = fullText.trim();
+  if (state.activeVaultTab === 'Working Style & Skills') {
+    if (el.vaultSkills) el.vaultSkills.value = trimmed;
+    state.vault.skills_and_work = trimmed;
+  } else if (state.activeVaultTab === 'Limits & Health') {
+    if (el.vaultLimits) el.vaultLimits.value = trimmed;
+    state.vault.limits_and_health = trimmed;
+  } else if (state.activeVaultTab === 'Personality & Traits') {
+    if (el.vaultPersonality) el.vaultPersonality.value = trimmed;
+    state.vault.personality_reports = trimmed;
+  } else if (state.activeVaultTab === 'Custom Directives') {
+    if (el.vaultCustomDoc) el.vaultCustomDoc.value = trimmed;
+    state.vault.custom_doc = trimmed;
   }
 }
 
@@ -1958,16 +2276,17 @@ function renderVaultBlocks() {
   }
 }
 
-function addNewSectionHeader() {
+async function addNewSectionHeader() {
   const name = prompt('Enter new section header title (e.g. "Core Skills", "Cognitive Architecture", "Operational Boundaries"):');
   if (!name || !name.trim()) return;
   const cleanName = name.trim();
 
   const tempId = `CTX-${Date.now()}`;
+  const initialText = `Initialized section: ${cleanName}`;
   const newBlock = {
     id: tempId,
     blockId: tempId,
-    text: `Initialized section: ${cleanName}`,
+    text: initialText,
     parentTab: state.activeVaultTab,
     headingGroup: cleanName,
     status: 'New',
@@ -1978,17 +2297,39 @@ function addNewSectionHeader() {
   state.vaultBlocks.push(newBlock);
   renderVaultBlocks();
   syncBlocksToText();
+
+  // Persist directly to Notion database so this header exists across page refreshes
+  try {
+    const res = await fetch('/api/notion/create-vault-block', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        text: initialText,
+        parentTab: state.activeVaultTab,
+        headingGroup: cleanName,
+        blockId: tempId,
+        isPinned: false
+      })
+    });
+    const d = await res.json();
+    if (d.block?.id) {
+      newBlock.id = d.block.id;
+    }
+  } catch (err) {
+    console.warn('Failed to persist new section header to Notion:', err);
+  }
 }
 
-function addNewBlockToGroup(groupName) {
+async function addNewBlockToGroup(groupName) {
   const text = prompt(`Enter new context bullet for "${groupName}":`);
   if (!text || !text.trim()) return;
+  const cleanText = text.trim();
 
   const tempId = `CTX-${Date.now()}`;
   const newBlock = {
     id: tempId,
     blockId: tempId,
-    text: text.trim(),
+    text: cleanText,
     parentTab: state.activeVaultTab,
     headingGroup: groupName,
     status: 'New',
@@ -2000,15 +2341,26 @@ function addNewBlockToGroup(groupName) {
   renderVaultBlocks();
   syncBlocksToText();
 
-  fetch('/api/notion/generate-vault-blocks', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      selectedSources: [{ id: 'manual', title: 'Manual Entry', object: 'page' }],
-      parentTab: state.activeVaultTab,
-      existingBlocks: [newBlock]
-    })
-  }).catch(err => console.warn(err));
+  // Persist directly to Notion database
+  try {
+    const res = await fetch('/api/notion/create-vault-block', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        text: cleanText,
+        parentTab: state.activeVaultTab,
+        headingGroup: groupName,
+        blockId: tempId,
+        isPinned: false
+      })
+    });
+    const d = await res.json();
+    if (d.block?.id) {
+      newBlock.id = d.block.id;
+    }
+  } catch (err) {
+    console.warn('Failed to persist new block to Notion:', err);
+  }
 }
 
 async function searchNotionWorkspace(query) {
@@ -2106,10 +2458,221 @@ function renderSelectedSources() {
   });
 }
 
+// ==========================================
+// CHANGE NOTES & DEVELOPMENT BACKLOG
+// ==========================================
+
+async function loadChangeNotes() {
+  try {
+    const res = await fetch('/api/change-notes');
+    if (res.ok) {
+      const data = await res.json();
+      if (data.notes && Array.isArray(data.notes)) {
+        state.changeNotes = data.notes;
+      }
+    }
+  } catch (err) {
+    console.warn('Could not fetch server change notes, falling back to local storage:', err);
+    const local = localStorage.getItem('contextflow_change_notes');
+    if (local) {
+      try { state.changeNotes = JSON.parse(local); } catch (e) {}
+    }
+  }
+  updateNotesBadge();
+  renderChangeNotes();
+}
+
+async function saveChangeNotes() {
+  localStorage.setItem('contextflow_change_notes', JSON.stringify(state.changeNotes));
+  updateNotesBadge();
+  try {
+    await fetch('/api/change-notes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ notes: state.changeNotes })
+    });
+  } catch (err) {
+    console.warn('Could not save notes to server:', err);
+  }
+}
+
+function updateNotesBadge() {
+  if (!el.notesBadge) return;
+  const pendingCount = state.changeNotes.filter(n => !n.completed).length;
+  el.notesBadge.textContent = pendingCount;
+  el.notesBadge.style.display = pendingCount > 0 ? 'inline-block' : 'none';
+}
+
+function renderChangeNotes() {
+  if (!el.notesList) return;
+  el.notesList.innerHTML = '';
+
+  let filtered = [...state.changeNotes];
+  if (state.notesFilter === 'pending') {
+    filtered = filtered.filter(n => !n.completed);
+  } else if (state.notesFilter === 'high') {
+    filtered = filtered.filter(n => !n.completed && n.priority === 'High');
+  } else if (state.notesFilter === 'completed') {
+    filtered = filtered.filter(n => n.completed);
+  }
+
+  if (!filtered.length) {
+    el.notesList.innerHTML = `
+      <div style="padding: 2rem; text-align: center; color: #94a3b8; background: rgba(15, 23, 42, 0.4); border-radius: 8px; border: 1px dashed rgba(148, 163, 184, 0.2);">
+        <p style="font-size: 0.85rem; margin: 0;">No change notes in this view. Use the form above to record ideas, tweaks, or feature requests for your upcoming agent runs.</p>
+      </div>
+    `;
+    return;
+  }
+
+  filtered.forEach(note => {
+    const card = document.createElement('div');
+    const priorityClass = `priority-${(note.priority || 'Medium').toLowerCase()}`;
+    card.className = `note-card ${priorityClass} ${note.completed ? 'completed' : ''}`;
+
+    let categoryClass = 'badge-feature';
+    if (note.category === 'UI & Flow') categoryClass = 'badge-ui';
+    else if (note.category === 'Prompt & Context') categoryClass = 'badge-prompt';
+    else if (note.category === 'Notion Schema') categoryClass = 'badge-notion';
+    else if (note.category === 'Bug Fix') categoryClass = 'badge-bug';
+
+    card.innerHTML = `
+      <div class="note-card-top">
+        <div class="note-card-title-row">
+          <input type="checkbox" class="note-checkbox" ${note.completed ? 'checked' : ''} title="Mark as implemented">
+          <span class="note-title">${escapeHtml(note.title)}</span>
+        </div>
+        <div class="note-meta-badges">
+          <span class="note-badge ${categoryClass}">${escapeHtml(note.category || 'Feature')}</span>
+          <span class="note-badge" style="background: rgba(255,255,255,0.08); color: #cbd5e1;">${escapeHtml(note.priority || 'Medium')}</span>
+          <button class="btn btn-ghost text-xs delete-note-btn" style="padding: 0 4px; color: #94a3b8;" title="Delete note">&times;</button>
+        </div>
+      </div>
+      ${note.details ? `<div class="note-details">${escapeHtml(note.details)}</div>` : ''}
+      <div class="note-card-footer">
+        <span>Added on ${escapeHtml(note.dateAdded || 'Today')}</span>
+        <span>${note.completed ? '✓ Implemented' : (note.priority === 'High' ? '🔥 Queued for Next Run' : '⏳ In Backlog')}</span>
+      </div>
+    `;
+
+    card.querySelector('.note-checkbox').addEventListener('change', (e) => {
+      note.completed = e.target.checked;
+      saveChangeNotes();
+      renderChangeNotes();
+    });
+
+    card.querySelector('.delete-note-btn').addEventListener('click', (e) => {
+      e.stopPropagation();
+      state.changeNotes = state.changeNotes.filter(n => n.id !== note.id);
+      saveChangeNotes();
+      renderChangeNotes();
+    });
+
+    el.notesList.appendChild(card);
+  });
+}
+
+function copyNotesForAgentPrompt() {
+  const pendingNotes = state.changeNotes.filter(n => !n.completed);
+  if (!pendingNotes.length) {
+    alert('No active/pending notes to copy.');
+    return;
+  }
+
+  let promptText = `Please review and implement the following planned changes and feature notes recorded in ContextFlow:\n\n`;
+  pendingNotes.forEach((n, idx) => {
+    promptText += `${idx + 1}. [${n.category || 'Feature'}][Priority: ${n.priority || 'Medium'}] ${n.title}\n`;
+    if (n.details) {
+      promptText += `   - Details: ${n.details}\n`;
+    }
+  });
+
+  navigator.clipboard.writeText(promptText).then(() => {
+    const orig = el.copyNotesForAgentBtn.innerHTML;
+    el.copyNotesForAgentBtn.innerHTML = `✓ Copied ${pendingNotes.length} Notes to Clipboard!`;
+    setTimeout(() => {
+      el.copyNotesForAgentBtn.innerHTML = orig;
+    }, 2500);
+  });
+}
+
 // Event Listeners
 function setupEventListeners() {
   el.nextBtn.addEventListener('click', handleNext);
   el.prevBtn.addEventListener('click', handlePrev);
+
+  // Change Notes Modal Event Listeners
+  if (el.notesBtn) {
+    el.notesBtn.addEventListener('click', () => {
+      el.notesModal.classList.remove('hidden');
+      renderChangeNotes();
+    });
+  }
+
+  if (el.closeNotesModal) {
+    el.closeNotesModal.addEventListener('click', () => {
+      el.notesModal.classList.add('hidden');
+    });
+  }
+
+  if (el.closeNotesModalFooter) {
+    el.closeNotesModalFooter.addEventListener('click', () => {
+      el.notesModal.classList.add('hidden');
+    });
+  }
+
+  if (el.addNoteBtn) {
+    el.addNoteBtn.addEventListener('click', () => {
+      const title = el.newNoteTitle ? el.newNoteTitle.value.trim() : '';
+      if (!title) {
+        alert('Please enter a note or change description.');
+        return;
+      }
+      const category = el.newNoteCategory ? el.newNoteCategory.value : 'Feature';
+      const priority = el.newNotePriority ? el.newNotePriority.value : 'High';
+      const details = el.newNoteDetails ? el.newNoteDetails.value.trim() : '';
+
+      const newNote = {
+        id: `note_${Date.now()}`,
+        title: title,
+        category: category,
+        priority: priority,
+        details: details,
+        completed: false,
+        dateAdded: new Date().toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+      };
+
+      state.changeNotes.unshift(newNote);
+      saveChangeNotes();
+      renderChangeNotes();
+
+      if (el.newNoteTitle) el.newNoteTitle.value = '';
+      if (el.newNoteDetails) el.newNoteDetails.value = '';
+    });
+  }
+
+  document.querySelectorAll('.note-filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.note-filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      state.notesFilter = btn.dataset.filter;
+      renderChangeNotes();
+    });
+  });
+
+  if (el.copyNotesForAgentBtn) {
+    el.copyNotesForAgentBtn.addEventListener('click', copyNotesForAgentPrompt);
+  }
+
+  if (el.clearCompletedNotesBtn) {
+    el.clearCompletedNotesBtn.addEventListener('click', () => {
+      if (confirm('Clear all completed/implemented notes?')) {
+        state.changeNotes = state.changeNotes.filter(n => !n.completed);
+        saveChangeNotes();
+        renderChangeNotes();
+      }
+    });
+  }
 
   // Grouped Categories Hub Toggle
   if (el.toggleGroupedHubBtn) {
@@ -2267,6 +2830,24 @@ function setupEventListeners() {
         alert(`Error generating hints: ${err.message}`);
         el.generateHintsBtn.innerHTML = origHtml;
         el.generateHintsBtn.disabled = false;
+      }
+    });
+  }
+
+  // Delete current question set button in notion banner
+  if (el.deleteCurrentSetBtn) {
+    el.deleteCurrentSetBtn.addEventListener('click', () => {
+      if (state.activeWorkflowId) {
+        deleteQuestionSet(state.activeWorkflowId);
+      }
+    });
+  }
+
+  // Delete question set button in bottom management bar
+  if (el.deleteSetBarBtn) {
+    el.deleteSetBarBtn.addEventListener('click', () => {
+      if (state.activeWorkflowId) {
+        deleteQuestionSet(state.activeWorkflowId);
       }
     });
   }
@@ -2482,11 +3063,125 @@ function setupEventListeners() {
   // Custom AI Generator Modal
   el.customGeneratorBtn.addEventListener('click', () => {
     el.generatorModal.classList.remove('hidden');
+    renderGeneratorSourcesChips();
   });
 
   el.closeGeneratorModal.addEventListener('click', () => {
     el.generatorModal.classList.add('hidden');
   });
+
+  // Generator Notion Sources Picker
+  if (el.toggleGenNotionSourcesBtn) {
+    el.toggleGenNotionSourcesBtn.addEventListener('click', () => {
+      if (el.genNotionSourcesPanel) {
+        el.genNotionSourcesPanel.classList.toggle('hidden');
+        if (!el.genNotionSourcesPanel.classList.contains('hidden') && (!el.genNotionSearchResults.children || el.genNotionSearchResults.children.length === 0)) {
+          searchGeneratorNotionSources('');
+        }
+      }
+    });
+  }
+
+  if (el.genNotionSearchBtn) {
+    el.genNotionSearchBtn.addEventListener('click', () => {
+      searchGeneratorNotionSources(el.genNotionSearchInput?.value.trim() || '');
+    });
+  }
+
+  if (el.genNotionSearchInput) {
+    el.genNotionSearchInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        searchGeneratorNotionSources(el.genNotionSearchInput.value.trim());
+      }
+    });
+  }
+
+  async function searchGeneratorNotionSources(query) {
+    if (!el.genNotionSearchResults) return;
+    el.genNotionSearchResults.classList.remove('hidden');
+    el.genNotionSearchResults.innerHTML = '<div style="padding: 8px; font-size: 0.75rem; color: #94a3b8;"><span class="spinner-sm"></span> Searching Notion workspace...</div>';
+
+    try {
+      const res = await fetch('/api/notion/search-workspace', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: query || '' })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Search failed');
+
+      renderGeneratorSearchResults(data.results || []);
+    } catch (err) {
+      el.genNotionSearchResults.innerHTML = `<div style="padding: 8px; font-size: 0.75rem; color: #ef4444;">Error: ${err.message}</div>`;
+    }
+  }
+
+  function renderGeneratorSearchResults(results) {
+    if (!el.genNotionSearchResults) return;
+    if (!results.length) {
+      el.genNotionSearchResults.innerHTML = '<div style="padding: 8px; font-size: 0.75rem; color: #94a3b8;">No matching Notion pages found.</div>';
+      return;
+    }
+
+    el.genNotionSearchResults.innerHTML = '';
+    results.forEach(item => {
+      const isSelected = state.generatorNotionSources.some(s => s.id === item.id);
+      const div = document.createElement('div');
+      div.className = `notion-search-item ${isSelected ? 'selected' : ''}`;
+      div.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 0.5rem; overflow: hidden;">
+          <span style="font-size: 0.95rem;">${item.icon || '📄'}</span>
+          <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+            <div style="font-weight: 600; font-size: 0.8rem; color: #f1f5f9;">${escapeHtml(item.title)}</div>
+            <div style="font-size: 0.65rem; color: #94a3b8;">${item.object.toUpperCase()}</div>
+          </div>
+        </div>
+        <button type="button" class="btn btn-ghost text-xs" style="padding: 2px 6px; font-size: 0.7rem; color: ${isSelected ? '#f87171' : '#a78bfa'};">
+          ${isSelected ? 'Remove' : '+ Add'}
+        </button>
+      `;
+
+      div.querySelector('button').addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (isSelected) {
+          state.generatorNotionSources = state.generatorNotionSources.filter(s => s.id !== item.id);
+        } else {
+          state.generatorNotionSources.push({ id: item.id, title: item.title, object: item.object });
+        }
+        renderGeneratorSourcesChips();
+        renderGeneratorSearchResults(results);
+      });
+
+      el.genNotionSearchResults.appendChild(div);
+    });
+  }
+
+  function renderGeneratorSourcesChips() {
+    if (!el.genSelectedSourcesChips) return;
+    const count = state.generatorNotionSources.length;
+    if (el.genSelectedSourcesCount) el.genSelectedSourcesCount.textContent = count;
+
+    if (count === 0) {
+      el.genSelectedSourcesChips.innerHTML = '<span class="text-xs text-muted" id="gen-no-sources-text" style="font-size: 0.75rem;">No Notion pages attached (will use Master Vault only).</span>';
+      return;
+    }
+
+    el.genSelectedSourcesChips.innerHTML = '';
+    state.generatorNotionSources.forEach(src => {
+      const chip = document.createElement('span');
+      chip.className = 'source-chip';
+      chip.style.cssText = 'background: rgba(139, 92, 246, 0.15); border: 1px solid rgba(139, 92, 246, 0.35); border-radius: 4px; padding: 2px 6px; font-size: 0.75rem; color: #c4b5fd; display: inline-flex; align-items: center; gap: 0.35rem; margin: 2px;';
+      chip.innerHTML = `
+        <span>📄 ${escapeHtml(src.title)}</span>
+        <button type="button" style="background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 0.85rem; padding: 0;" title="Remove">&times;</button>
+      `;
+      chip.querySelector('button').addEventListener('click', () => {
+        state.generatorNotionSources = state.generatorNotionSources.filter(s => s.id !== src.id);
+        renderGeneratorSourcesChips();
+      });
+      el.genSelectedSourcesChips.appendChild(chip);
+    });
+  }
 
 // Pre-persist new Question Set and its Questions & Options into Notion before starting
 async function persistAndLaunchNotionQuestionSet({ title, description, category, questions, parentSetId, parentSetTitle, originalPrompt }) {
@@ -2585,33 +3280,28 @@ async function persistAndLaunchNotionQuestionSet({ title, description, category,
       const masterContext = `${state.vault.skills_and_work}\n${state.vault.limits_and_health}\n${state.vault.custom_doc}`;
       const activeKey = state.apiKey || localStorage.getItem('contextflow_api_key') || el.apiKeyInput.value.trim();
 
-      let genResult;
-      if (activeKey) {
-        // Direct browser call to Google AI Studio
-        genResult = await generateQuestionsDirect(activeKey, state.model, goal, numQuestions, masterContext);
-      } else {
-        // Server proxy call
-        const res = await fetch('/api/generate-questions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            goal: goal,
-            numQuestions: numQuestions,
-            masterContext: masterContext,
-            apiKey: state.apiKey,
-            model: state.model
-          })
-        });
+      // Always proxy to server endpoint so selected Notion pages can be fetched with backend NOTION_TOKEN
+      const res = await fetch('/api/generate-questions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          goal: goal,
+          numQuestions: numQuestions,
+          masterContext: masterContext,
+          selectedNotionSources: state.generatorNotionSources || [],
+          apiKey: activeKey,
+          model: state.model
+        })
+      });
 
-        const data = await res.json();
-        if (!res.ok) {
-          throw new Error(data.error || 'Failed to generate questions');
-        }
-        genResult = {
-          title: data.title || goal.slice(0, 24) + '...',
-          questions: data.questions || []
-        };
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to generate questions');
       }
+      const genResult = {
+        title: data.title || goal.slice(0, 24) + '...',
+        questions: data.questions || []
+      };
 
       const prettifiedTitle = genResult.title || (goal.slice(0, 24) + '...');
       el.generatorModal.classList.add('hidden');
@@ -2649,27 +3339,26 @@ async function persistAndLaunchNotionQuestionSet({ title, description, category,
   // Vault Modal
   el.vaultBtn.addEventListener('click', () => {
     el.vaultModal.classList.remove('hidden');
-    loadVaultBlocks('Working Style & Skills');
+    loadVaultTabs();
+    loadVaultBlocks(state.activeVaultTab || 'Working Style & Skills');
   });
 
   el.closeVaultModal.addEventListener('click', () => {
     el.vaultModal.classList.add('hidden');
   });
 
-  // Vault subtabs
-  document.querySelectorAll('.vault-tab').forEach(tab => {
-    tab.addEventListener('click', () => {
-      document.querySelectorAll('.vault-tab').forEach(t => t.classList.remove('active'));
-      document.querySelectorAll('.vault-panel').forEach(p => p.classList.add('hidden'));
+  // Vault Tab Controls (Create, Rename, Delete mirrored to Notion)
+  if (el.addVaultTabBtn) {
+    el.addVaultTabBtn.addEventListener('click', createNewVaultTab);
+  }
 
-      tab.classList.add('active');
-      const targetId = `tab-${tab.dataset.vaultTab}`;
-      const targetPanel = document.getElementById(targetId);
-      if (targetPanel) targetPanel.classList.remove('hidden');
+  if (el.renameActiveTabBtn) {
+    el.renameActiveTabBtn.addEventListener('click', renameActiveVaultTab);
+  }
 
-      loadVaultBlocks(tab.textContent.trim());
-    });
-  });
+  if (el.deleteActiveTabBtn) {
+    el.deleteActiveTabBtn.addEventListener('click', deleteActiveVaultTab);
+  }
 
   // Notion Sources & Artifacts Picker Controls
   if (el.toggleSourcesPickerBtn) {
@@ -2712,7 +3401,7 @@ async function persistAndLaunchNotionQuestionSet({ title, description, category,
       }
 
       const origHtml = el.generateVaultBlocksBtn.innerHTML;
-      el.generateVaultBlocksBtn.innerHTML = `<span class="spinner-sm"></span> Extracting & Synthesizing Blocks into Notion DB...`;
+      el.generateVaultBlocksBtn.innerHTML = `<span class="spinner-sm"></span> Analyzing & Extracting Candidate Blocks...`;
       el.generateVaultBlocksBtn.disabled = true;
 
       try {
@@ -2729,24 +3418,162 @@ async function persistAndLaunchNotionQuestionSet({ title, description, category,
         });
 
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Failed to generate context blocks');
+        if (!res.ok) throw new Error(data.error || 'Failed to extract context blocks');
 
-        state.vaultBlocks = data.blocks || [];
-        renderVaultBlocks();
-        syncBlocksToText();
+        const candidates = data.candidateBlocks || [];
+        state.candidateVaultBlocks = candidates;
+        state.selectedCandidateIds = new Set(candidates.map(c => c.id));
 
-        el.generateVaultBlocksBtn.innerHTML = `✓ Generated ${data.blocks.length} Blocks into Notion DB!`;
+        renderCandidateStagingBox();
+
+        el.generateVaultBlocksBtn.innerHTML = `✓ ${candidates.length} Candidate Blocks Proposed!`;
         setTimeout(() => {
           el.generateVaultBlocksBtn.innerHTML = origHtml;
           el.generateVaultBlocksBtn.disabled = false;
           if (el.notionSourcesPanel) el.notionSourcesPanel.classList.add('hidden');
-        }, 2500);
+        }, 1500);
 
       } catch (err) {
-        alert(`Error generating vault blocks: ${err.message}`);
+        alert(`Error proposing vault blocks: ${err.message}`);
         el.generateVaultBlocksBtn.innerHTML = origHtml;
         el.generateVaultBlocksBtn.disabled = false;
       }
+    });
+  }
+
+  // Candidate Approval Controls
+  if (el.selectAllCandidatesBtn) {
+    el.selectAllCandidatesBtn.addEventListener('click', () => {
+      state.selectedCandidateIds = new Set(state.candidateVaultBlocks.map(c => c.id));
+      renderCandidateStagingBox();
+    });
+  }
+
+  if (el.dismissCandidatesBtn) {
+    el.dismissCandidatesBtn.addEventListener('click', () => {
+      state.candidateVaultBlocks = [];
+      state.selectedCandidateIds.clear();
+      if (el.vaultCandidateStagingBox) el.vaultCandidateStagingBox.classList.add('hidden');
+    });
+  }
+
+  if (el.approveCandidatesBtn) {
+    el.approveCandidatesBtn.addEventListener('click', async () => {
+      const selected = state.candidateVaultBlocks.filter(c => state.selectedCandidateIds.has(c.id));
+      if (!selected.length) {
+        alert('Please check at least one block to approve and create in Notion.');
+        return;
+      }
+
+      const origBtnText = el.approveCandidatesBtn.textContent;
+      el.approveCandidatesBtn.disabled = true;
+      el.approveCandidatesBtn.innerHTML = `<span class="spinner-sm"></span> Creating ${selected.length} Pages in Notion DB...`;
+
+      let successCount = 0;
+      for (const block of selected) {
+        try {
+          const res = await fetch('/api/notion/create-vault-block', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              text: block.text,
+              parentTab: block.parentTab || state.activeVaultTab,
+              headingGroup: block.headingGroup || 'General',
+              sourcePages: block.sourcePages || 'Notion Source',
+              isPinned: false
+            })
+          });
+          const d = await res.json();
+          if (d.block) {
+            state.vaultBlocks.push(d.block);
+            successCount++;
+          }
+        } catch (err) {
+          console.warn('Failed to persist approved block:', err);
+        }
+      }
+
+      // Clear approved candidates
+      state.candidateVaultBlocks = state.candidateVaultBlocks.filter(c => !state.selectedCandidateIds.has(c.id));
+      state.selectedCandidateIds.clear();
+
+      if (state.candidateVaultBlocks.length === 0) {
+        if (el.vaultCandidateStagingBox) el.vaultCandidateStagingBox.classList.add('hidden');
+      } else {
+        renderCandidateStagingBox();
+      }
+
+      renderVaultBlocks();
+      syncBlocksToText();
+      persistAppState();
+
+      el.approveCandidatesBtn.disabled = false;
+      el.approveCandidatesBtn.textContent = origBtnText;
+      alert(`Successfully created ${successCount} context pages in your Notion Master Vault!`);
+    });
+  }
+
+  function renderCandidateStagingBox() {
+    if (!el.vaultCandidateStagingBox || !el.candidateBlocksList) return;
+    const candidates = state.candidateVaultBlocks || [];
+
+    if (candidates.length === 0) {
+      el.vaultCandidateStagingBox.classList.add('hidden');
+      return;
+    }
+
+    el.vaultCandidateStagingBox.classList.remove('hidden');
+    if (el.candidateCount) el.candidateCount.textContent = candidates.length;
+    if (el.selectedCandidatesTally) {
+      el.selectedCandidatesTally.textContent = `${state.selectedCandidateIds.size} of ${candidates.length} selected for Notion creation`;
+    }
+
+    el.candidateBlocksList.innerHTML = '';
+    candidates.forEach(cand => {
+      const isChecked = state.selectedCandidateIds.has(cand.id);
+      const card = document.createElement('div');
+      card.style.cssText = `
+        display: flex;
+        align-items: flex-start;
+        gap: 0.65rem;
+        padding: 0.5rem 0.75rem;
+        background: ${isChecked ? 'rgba(139, 92, 246, 0.15)' : 'rgba(15, 23, 42, 0.4)'};
+        border: 1px solid ${isChecked ? 'rgba(139, 92, 246, 0.4)' : 'rgba(255, 255, 255, 0.08)'};
+        border-radius: 6px;
+        transition: all 0.2s ease;
+      `;
+
+      card.innerHTML = `
+        <input type="checkbox" class="cand-checkbox" ${isChecked ? 'checked' : ''} style="margin-top: 3px; cursor: pointer;">
+        <div style="flex: 1; display: flex; flex-direction: column; gap: 0.25rem;">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;">
+            <span class="badge" style="font-size: 0.65rem; background: rgba(139, 92, 246, 0.25); color: #c4b5fd;">
+              ${escapeHtml(cand.headingGroup)}
+            </span>
+            <span style="font-size: 0.65rem; color: #94a3b8;">
+              ${escapeHtml(cand.sourcePages || '')}
+            </span>
+          </div>
+          <div class="cand-text" style="font-size: 0.8rem; color: #f1f5f9; line-height: 1.4;">
+            ${escapeHtml(cand.text)}
+          </div>
+        </div>
+      `;
+
+      card.querySelector('.cand-checkbox').addEventListener('change', (e) => {
+        if (e.target.checked) {
+          state.selectedCandidateIds.add(cand.id);
+        } else {
+          state.selectedCandidateIds.delete(cand.id);
+        }
+        if (el.selectedCandidatesTally) {
+          el.selectedCandidatesTally.textContent = `${state.selectedCandidateIds.size} of ${candidates.length} selected for Notion creation`;
+        }
+        card.style.background = e.target.checked ? 'rgba(139, 92, 246, 0.15)' : 'rgba(15, 23, 42, 0.4)';
+        card.style.borderColor = e.target.checked ? 'rgba(139, 92, 246, 0.4)' : 'rgba(255, 255, 255, 0.08)';
+      });
+
+      el.candidateBlocksList.appendChild(card);
     });
   }
 
@@ -2760,13 +3587,18 @@ async function persistAndLaunchNotionQuestionSet({ title, description, category,
   if (el.toggleVaultViewModeBtn) {
     el.toggleVaultViewModeBtn.addEventListener('click', () => {
       state.vaultViewMode = state.vaultViewMode === 'blocks' ? 'raw' : 'blocks';
+      const activeRawTextarea = getActiveRawTextarea();
+
       if (state.vaultViewMode === 'raw') {
         el.vaultBlocksOrganizer?.classList.add('hidden');
-        el.vaultSkills?.classList.remove('hidden');
+        document.querySelectorAll('.vault-panel').forEach(p => p.classList.add('hidden'));
+        if (activeRawTextarea && activeRawTextarea.parentElement) {
+          activeRawTextarea.parentElement.classList.remove('hidden');
+        }
         el.toggleVaultViewModeBtn.innerHTML = 'View: <strong>Raw Text</strong>';
       } else {
         el.vaultBlocksOrganizer?.classList.remove('hidden');
-        el.vaultSkills?.classList.add('hidden');
+        document.querySelectorAll('.vault-panel').forEach(p => p.classList.add('hidden'));
         el.toggleVaultViewModeBtn.innerHTML = 'View: <strong>Blocks</strong>';
         syncBlocksToText();
         renderVaultBlocks();
@@ -2932,6 +3764,85 @@ function renderHistoryModal() {
 
     el.historyList.appendChild(card);
   });
+}
+
+// Delete Question Set from Notion and ContextFlow
+async function deleteQuestionSet(workflowId) {
+  const wf = state.workflows[workflowId];
+  if (!wf) return;
+
+  const displayName = wf.fullName || wf.name;
+  const isConfirmed = window.confirm(`Are you sure you want to permanently delete "${displayName}"?\n\nThis will remove the question set, all of its questions, answer options, and recorded responses from both ContextFlow and your Notion database.`);
+  if (!isConfirmed) return;
+
+  try {
+    if (el.deleteCurrentSetBtn && state.activeWorkflowId === workflowId) {
+      el.deleteCurrentSetBtn.disabled = true;
+      el.deleteCurrentSetBtn.textContent = 'Deleting...';
+    }
+
+    if (wf.notionSetId) {
+      const res = await fetch('/api/notion/delete-question-set', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ questionSetId: wf.notionSetId })
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Failed to delete question set from Notion');
+      }
+    }
+
+    // Remove from in-memory state
+    delete state.workflows[workflowId];
+    delete state.answers[workflowId];
+
+    // Track deleted local workflow IDs in localStorage so hardcoded defaults don't resurrect
+    try {
+      const deletedList = JSON.parse(localStorage.getItem('contextflow_deleted_workflows') || '[]');
+      if (!deletedList.includes(workflowId)) {
+        deletedList.push(workflowId);
+        localStorage.setItem('contextflow_deleted_workflows', JSON.stringify(deletedList));
+      }
+    } catch (e) {
+      console.warn('Failed to update deleted workflows list', e);
+    }
+
+    // If active workflow was deleted, switch to the first available workflow
+    const remainingWfIds = Object.keys(state.workflows);
+    if (state.activeWorkflowId === workflowId) {
+      if (remainingWfIds.length > 0) {
+        state.activeWorkflowId = remainingWfIds[0];
+        state.currentIndex = 0;
+      } else {
+        state.activeWorkflowId = null;
+      }
+    }
+
+    persistAppState();
+    renderWorkflowTabs();
+    renderCategoryChips();
+    renderGroupedSetsHub();
+
+    if (state.activeWorkflowId && state.workflows[state.activeWorkflowId]) {
+      renderCurrentQuestion();
+    } else {
+      if (el.questionLabel) el.questionLabel.textContent = 'No question sets available.';
+      if (el.inputContainer) el.inputContainer.innerHTML = '';
+      if (el.notionContextBanner) el.notionContextBanner.classList.add('hidden');
+    }
+
+    alert(`Successfully deleted "${displayName}" from ContextFlow and Notion.`);
+  } catch (err) {
+    console.error('Error deleting question set:', err);
+    alert(`Could not delete question set: ${err.message}`);
+  } finally {
+    if (el.deleteCurrentSetBtn) {
+      el.deleteCurrentSetBtn.disabled = false;
+      el.deleteCurrentSetBtn.textContent = '🗑️ Delete Set';
+    }
+  }
 }
 
 // Kick off app

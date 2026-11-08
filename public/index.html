@@ -26,6 +26,9 @@
       </div>
 
       <div class="header-right">
+        <span id="save-state-indicator" class="text-xs" style="color: #10b981; font-weight: 600; display: inline-flex; align-items: center; gap: 0.35rem; transition: opacity 0.3s ease; margin-right: 0.25rem;">
+          <span style="display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #10b981;"></span> Saved
+        </span>
         <button id="history-btn" class="btn btn-secondary">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
           History
@@ -35,6 +38,11 @@
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
           Master Profile Vault
           <span id="vault-indicator" class="status-dot active" title="Profile Loaded"></span>
+        </button>
+        <button id="notes-btn" class="btn btn-secondary">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          Change Notes
+          <span id="notes-badge" class="badge-pill" style="background:#3b82f6;">0</span>
         </button>
         <button id="settings-btn" class="btn btn-secondary">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
@@ -98,10 +106,13 @@
                   ↳ Expanded from: <strong id="parent-set-name">Parent</strong>
                 </span>
               </div>
-              <div class="notion-context-right">
+              <div class="notion-context-right" style="display: flex; align-items: center; gap: 0.5rem;">
                 <a id="open-notion-set-link" href="#" target="_blank" rel="noopener" class="btn btn-ghost text-xs" style="color: #a78bfa; text-decoration: none;">
                   Open in Notion ↗
                 </a>
+                <button id="delete-current-set-btn" class="btn btn-ghost text-xs" style="color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); padding: 0.2rem 0.5rem;" title="Delete this question set from ContextFlow and Notion">
+                  🗑️ Delete Set
+                </button>
               </div>
             </div>
 
@@ -160,6 +171,18 @@
             <button id="next-btn" class="btn btn-primary">
               Next
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            </button>
+          </div>
+
+          <!-- Bottom Set Management Bar -->
+          <div id="set-management-bar" class="set-management-bar" style="margin-top: 1rem; padding: 0.75rem 1rem; background: rgba(239, 68, 68, 0.05); border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 8px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
+            <div style="display: flex; align-items: center; gap: 0.6rem;">
+              <span style="font-size: 1rem;">⚠️</span>
+              <span style="font-size: 0.8rem; color: #94a3b8;">Question Set Actions:</span>
+              <span id="management-bar-set-name" style="font-size: 0.85rem; font-weight: 600; color: #f1f5f9;">Active Set</span>
+            </div>
+            <button id="delete-set-bar-btn" class="btn text-xs" style="background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4); padding: 0.35rem 0.85rem; font-weight: 600; display: flex; align-items: center; gap: 0.4rem;">
+              <span>🗑️</span> Delete Question Set <span id="delete-set-name-label" style="font-weight: 700; color: #fca5a5;"></span>
             </button>
           </div>
         </div>
@@ -238,6 +261,33 @@
               </select>
             </div>
           </div>
+
+          <!-- Ground with Notion Workspace Documents / AI Write-ups -->
+          <div class="form-group mt-3" style="background: rgba(15, 23, 42, 0.5); border: 1px solid rgba(139, 92, 246, 0.25); border-radius: 8px; padding: 0.75rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
+              <label class="form-label" style="margin: 0; color: #c4b5fd; display: flex; align-items: center; gap: 0.4rem;">
+                <span>❖</span> Ground with Notion Pages, Docs or AI Reports
+              </label>
+              <button type="button" id="toggle-gen-notion-sources-btn" class="btn btn-ghost text-xs" style="color: #a78bfa; padding: 2px 6px;">
+                📁 Pick Notion Docs (<span id="gen-selected-sources-count">0</span>)
+              </button>
+            </div>
+            <p class="text-xs text-muted" style="margin-bottom: 0.5rem; line-height: 1.4;">
+              Select any project spec, research page, or Notion AI report from your workspace. Gemini will read it alongside your Master Vault to tailor these questions directly to your project.
+            </p>
+
+            <div id="gen-notion-sources-panel" class="hidden" style="margin-top: 0.5rem; border-top: 1px dashed rgba(255, 255, 255, 0.1); padding-top: 0.5rem;">
+              <div style="display: flex; gap: 0.4rem; margin-bottom: 0.4rem;">
+                <input type="text" id="gen-notion-search-input" placeholder="Search Notion pages, documents, or reports..." class="form-input text-xs" style="flex: 1;">
+                <button type="button" id="gen-notion-search-btn" class="btn btn-secondary text-xs">Search</button>
+              </div>
+              <div id="gen-notion-search-results" class="notion-search-results hidden" style="max-height: 150px; overflow-y: auto;"></div>
+            </div>
+
+            <div id="gen-selected-sources-chips" class="selected-sources-chips" style="margin-top: 0.4rem;">
+              <span class="text-xs text-muted" id="gen-no-sources-text" style="font-size: 0.75rem;">No Notion pages attached (will use Master Vault only).</span>
+            </div>
+          </div>
         </div>
         <div class="modal-footer">
           <button id="run-generator-btn" class="btn btn-primary">
@@ -310,53 +360,84 @@
             </button>
           </div>
 
-          <div class="vault-tabs">
-            <button class="vault-tab active" data-vault-tab="skills_and_work">Working Style & Skills</button>
-            <button class="vault-tab" data-vault-tab="limits_and_health">Limitations & Non-Negotiables</button>
-            <button class="vault-tab" data-vault-tab="personality_reports">Personality & Cognition</button>
-            <button class="vault-tab" data-vault-tab="custom_doc">Google Doc / Custom Context</button>
+          <!-- Staging & Review Box for Generated Candidate Blocks (Approval Gate) -->
+          <div id="vault-candidate-staging-box" class="hidden" style="margin-bottom: 1rem; background: rgba(139, 92, 246, 0.08); border: 1px solid rgba(139, 92, 246, 0.3); border-radius: 8px; padding: 1rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; flex-wrap: wrap; gap: 0.5rem;">
+              <div style="font-weight: 700; color: #f1f5f9; display: flex; align-items: center; gap: 0.4rem; font-size: 0.9rem;">
+                <span>✨</span> Candidate Blocks Review & Approval (<span id="candidate-count">0</span> proposed)
+              </div>
+              <div style="display: flex; gap: 0.4rem;">
+                <button type="button" id="select-all-candidates-btn" class="btn btn-ghost text-xs" style="color: #cbd5e1;">Select All</button>
+                <button type="button" id="dismiss-candidates-btn" class="btn btn-ghost text-xs" style="color: #f87171;">Dismiss All</button>
+              </div>
+            </div>
+            <p class="text-xs text-muted" style="margin-bottom: 0.75rem; line-height: 1.4;">
+              Review the context bullets extracted from your Notion pages. Select the ones you want to add into your Master Vault, or add custom blocks. Only selected blocks will be generated and saved as pages in your Notion database.
+            </p>
+            <div id="candidate-blocks-list" style="display: flex; flex-direction: column; gap: 0.5rem; max-height: 280px; overflow-y: auto; padding-right: 4px; margin-bottom: 0.75rem;">
+              <!-- Dynamically populated candidate check cards -->
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px dashed rgba(255, 255, 255, 0.1); padding-top: 0.75rem;">
+              <span id="selected-candidates-tally" class="text-xs" style="color: #a78bfa; font-weight: 600;">0 selected for database creation</span>
+              <button type="button" id="approve-candidates-btn" class="btn btn-primary text-xs" style="background: #8b5cf6;">
+                ✓ Approve & Create Pages in Notion DB
+              </button>
+            </div>
+          </div>
+
+          <div class="vault-tabs-header-row" style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.5rem;">
+            <div class="vault-tabs" id="vault-tabs-list" style="margin-bottom: 0; flex: 1;">
+              <!-- Dynamic tabs rendered from Notion -->
+            </div>
+            <button id="add-vault-tab-btn" class="btn btn-secondary text-xs" style="border-color: #8b5cf6; color: #c4b5fd; white-space: nowrap;">
+              + New Tab
+            </button>
           </div>
 
           <div class="vault-content">
-            <!-- Tab 1 -->
-            <div id="tab-skills_and_work" class="vault-panel active">
-              <label class="form-label" style="display: flex; justify-content: space-between; align-items: center;">
-                <span>Core Skills, Strengths & Working Preferences</span>
-                <span class="text-xs text-muted" style="font-weight: normal;">Synced with Notion Master Context Vault Database</span>
-              </label>
+            <!-- Dynamic Vault Blocks Canvas Container (Used for whichever tab is selected) -->
+            <div id="vault-blocks-canvas-container" style="display: flex; flex-direction: column; gap: 0.75rem;">
+              <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                  <label id="active-vault-tab-title" class="form-label" style="margin: 0; font-weight: 700; color: #f1f5f9;">Working Style & Skills</label>
+                  <button id="rename-active-tab-btn" class="btn btn-ghost text-xs" style="color: #94a3b8; padding: 1px 4px;" title="Rename active tab">✏️</button>
+                  <button id="delete-active-tab-btn" class="btn btn-ghost text-xs" style="color: #ef4444; padding: 1px 4px;" title="Delete active tab and its blocks">🗑️</button>
+                </div>
+                <span class="text-xs text-muted">Synced with Notion Master Context Vault Database</span>
+              </div>
 
               <!-- Interactive Blocks Organizer Canvas -->
               <div id="vault-blocks-organizer" class="vault-blocks-organizer"></div>
+            </div>
 
-              <textarea id="vault-skills" class="form-textarea hidden mt-2" rows="8" placeholder="e.g.
+            <!-- Tab 1 Raw Textarea -->
+            <div id="tab-skills_and_work" class="vault-panel hidden">
+              <textarea id="vault-skills" class="form-textarea mt-2" rows="8" placeholder="e.g.
 - Skills: Systems Architecture, Notion Database Design, Process Automation, Technical Writing
 - Strengths: Deep conceptual synthesis, rapid prototyping, spotting bottlenecks
 - Working Preferences: Asynchronous communication preferred, deep uninterrupted blocks, high-autonomy environments."></textarea>
             </div>
 
-            <!-- Tab 2 -->
+            <!-- Tab 2 Raw Textarea -->
             <div id="tab-limits_and_health" class="vault-panel hidden">
-              <label class="form-label">Health, Schedule, Budget & Strict Non-Negotiables</label>
-              <textarea id="vault-limits" class="form-textarea" rows="8" placeholder="e.g.
+              <textarea id="vault-limits" class="form-textarea mt-2" rows="8" placeholder="e.g.
 - Must-Haves: Remote-friendly, self-paced learning, high earning upside relative to barrier
 - Must-Nots: Rigid 9-to-5 synchronous call marathons, unbacked buzzword bureaucracy
 - Health / Constraints: Screen fatigue considerations, maximum 15 hours/week for study or side builds."></textarea>
             </div>
 
-            <!-- Tab 3 -->
+            <!-- Tab 3 Raw Textarea -->
             <div id="tab-personality_reports" class="vault-panel hidden">
-              <label class="form-label">Personality Type Quizzes, Behavioral Traits & Opinions</label>
-              <textarea id="vault-personality" class="form-textarea" rows="8" placeholder="e.g.
+              <textarea id="vault-personality" class="form-textarea mt-2" rows="8" placeholder="e.g.
 - Personality: INTJ / Strategic Visionary with Builder execution bias
 - Communication Style: Direct, structured, low fluff, high clarity
 - Opinions & Philosophy: Value leverage through tooling and software over raw brute force labor."></textarea>
             </div>
 
-            <!-- Tab 4 -->
+            <!-- Tab 4 Raw Textarea -->
             <div id="tab-custom_doc" class="vault-panel hidden">
-              <label class="form-label">Paste Google Doc / External Context Pack</label>
               <p class="text-xs text-muted mb-2">Paste raw text from your Google Doc (<code>https://docs.google.com/document/d/1c19GMdoYax5z...</code>) or notes here:</p>
-              <textarea id="vault-custom-doc" class="form-textarea" rows="8" placeholder="Paste comprehensive notes, resumes, or context packs here..."></textarea>
+              <textarea id="vault-custom-doc" class="form-textarea mt-2" rows="8" placeholder="Paste comprehensive notes, resumes, or context packs here..."></textarea>
             </div>
 
             <!-- File Drop / Upload Box -->
@@ -483,6 +564,74 @@
         </div>
         <div class="modal-footer">
           <button id="save-settings-btn" class="btn btn-primary">Save Settings</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Change Notes & Next Run Backlog Modal -->
+    <div id="notes-modal" class="modal hidden">
+      <div class="modal-backdrop"></div>
+      <div class="modal-dialog modal-lg" style="max-width: 860px;">
+        <div class="modal-header">
+          <div class="modal-header-icon" style="background: rgba(59, 130, 246, 0.15); color: #60a5fa;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          </div>
+          <div>
+            <h3 class="modal-title">Change Notes & Next Run Backlog</h3>
+            <p class="modal-subtitle">Record requested improvements, prompt adjustments, and features for upcoming agent runs.</p>
+          </div>
+          <button class="modal-close" id="close-notes-modal">&times;</button>
+        </div>
+
+        <div class="modal-body">
+          <!-- Add Note Box -->
+          <div class="add-note-card" style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(148, 163, 184, 0.2); border-radius: 8px; padding: 1rem; margin-bottom: 1.25rem;">
+            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.5rem;">
+              <input type="text" id="new-note-title" class="form-input text-xs" placeholder="What change or feature would you like to implement?" style="flex: 2; min-width: 240px;">
+              <select id="new-note-category" class="form-select text-xs" style="flex: 1; min-width: 140px;">
+                <option value="Feature">✨ Feature Request</option>
+                <option value="UI & Flow">🎨 UI & Interaction</option>
+                <option value="Prompt & Context">🧠 Prompt & Context</option>
+                <option value="Notion Schema">❖ Notion DB Schema</option>
+                <option value="Bug Fix">🐛 Bug Fix</option>
+              </select>
+              <select id="new-note-priority" class="form-select text-xs" style="width: auto;">
+                <option value="High">🔥 High Priority (Next Run)</option>
+                <option value="Medium">⚡ Medium</option>
+                <option value="Low">💡 Nice to Have</option>
+              </select>
+              <button id="add-note-btn" class="btn btn-primary text-xs" style="white-space: nowrap;">+ Add to Backlog</button>
+            </div>
+            <textarea id="new-note-details" class="form-textarea text-xs" rows="2" placeholder="Optional details, edge cases, or specifics for Antigravity to reference..."></textarea>
+          </div>
+
+          <!-- Notes Filter & Action Bar -->
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
+            <div class="category-header-actions" style="display: flex; gap: 0.4rem;">
+              <button class="btn btn-secondary text-xs note-filter-btn active" data-filter="all">All Notes</button>
+              <button class="btn btn-secondary text-xs note-filter-btn" data-filter="pending">⏳ Pending</button>
+              <button class="btn btn-secondary text-xs note-filter-btn" data-filter="high">🔥 Next Run Only</button>
+              <button class="btn btn-secondary text-xs note-filter-btn" data-filter="completed">✓ Implemented</button>
+            </div>
+            <div style="display: flex; gap: 0.5rem;">
+              <button id="copy-notes-for-agent-btn" class="btn btn-secondary text-xs" style="border-color: #3b82f6; color: #93c5fd;">
+                📋 Copy Pending Notes for Antigravity Chat
+              </button>
+              <button id="clear-completed-notes-btn" class="btn btn-ghost text-xs" style="color: #94a3b8;">
+                Clear Implemented
+              </button>
+            </div>
+          </div>
+
+          <!-- Notes List Container -->
+          <div id="notes-list" class="notes-list" style="display: flex; flex-direction: column; gap: 0.6rem; max-height: 380px; overflow-y: auto;">
+            <!-- Dynamically populated note cards -->
+          </div>
+        </div>
+
+        <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center;">
+          <span id="notes-status-text" class="text-xs text-muted">Notes synced to change_notes.json & browser storage</span>
+          <button id="close-notes-modal-footer" class="btn btn-secondary text-xs">Close</button>
         </div>
       </div>
     </div>

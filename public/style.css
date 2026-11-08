@@ -1834,3 +1834,138 @@ body {
 .add-block-btn-row {
   margin-top: 0.2rem;
 }
+
+/* Change Notes & Backlog Styles */
+.note-card {
+  background: rgba(30, 41, 59, 0.7);
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  border-left: 3px solid #3b82f6;
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  transition: transform 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+}
+
+.note-card:hover {
+  transform: translateY(-1px);
+  border-color: rgba(148, 163, 184, 0.35);
+}
+
+.note-card.priority-high {
+  border-left-color: #ef4444;
+}
+
+.note-card.priority-medium {
+  border-left-color: #f59e0b;
+}
+
+.note-card.priority-low {
+  border-left-color: #64748b;
+}
+
+.note-card.completed {
+  opacity: 0.6;
+  border-left-color: #10b981;
+}
+
+.note-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.note-card-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex: 1;
+}
+
+.note-checkbox {
+  cursor: pointer;
+  width: 16px;
+  height: 16px;
+  accent-color: #10b981;
+}
+
+.note-title {
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: #f8fafc;
+}
+
+.note-card.completed .note-title {
+  text-decoration: line-through;
+  color: #94a3b8;
+}
+
+.note-details {
+  font-size: 0.78rem;
+  color: #cbd5e1;
+  line-height: 1.45;
+  padding-left: 1.6rem;
+}
+
+.note-card-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-left: 1.6rem;
+  font-size: 0.7rem;
+  color: #64748b;
+  margin-top: 0.2rem;
+}
+
+.note-meta-badges {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.note-badge {
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 9999px;
+  letter-spacing: 0.02em;
+}
+
+.badge-feature {
+  background: rgba(139, 92, 246, 0.15);
+  color: #c4b5fd;
+  border: 1px solid rgba(139, 92, 246, 0.3);
+}
+
+.badge-ui {
+  background: rgba(59, 130, 246, 0.15);
+  color: #93c5fd;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.badge-prompt {
+  background: rgba(236, 72, 153, 0.15);
+  color: #f472b6;
+  border: 1px solid rgba(236, 72, 153, 0.3);
+}
+
+.badge-notion {
+  background: rgba(16, 185, 129, 0.15);
+  color: #6ee7b7;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.badge-bug {
+  background: rgba(239, 68, 68, 0.15);
+  color: #fca5a5;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.note-filter-btn.active {
+  background: #3b82f6;
+  color: #ffffff;
+  border-color: #3b82f6;
+}

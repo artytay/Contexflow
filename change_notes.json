@@ -1,0 +1,20 @@
+[
+  {
+    "id": "note_1794117449457",
+    "title": "I need the headers that are created in the master vault to be saved",
+    "category": "UI & Flow",
+    "priority": "High",
+    "details": "the headers i create for adding blocks under in the mastervault are not saving when i reopend the mastervbault, the first tab is also the only tab that has this block setup and headings structure assigned to it, the other tabs are still the old format with just a single text field for custom insctructions to be typed into,",
+    "completed": false,
+    "dateAdded": "8 Nov, 16:57"
+  },
+  {
+    "id": "note_1794116908786",
+    "title": "I dont think the notion search function for the master vault is displaying options that are workspace wide, it's only searching within the actual database of previous questions and answers and responses",
+    "category": "Notion Schema",
+    "priority": "Low",
+    "details": "I dont think the notion search function for the master vault is displaying options that are workspace wide, it's only searching within the actual database of previous questions and answers and responses",
+    "completed": false,
+    "dateAdded": "8 Nov, 16:48"
+  }
+]

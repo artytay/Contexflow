@@ -438,6 +438,149 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // API endpoint: Delete Question Set and all linked Questions, Options & Responses from Notion
+  if (pathname === '/api/notion/delete-question-set' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', async () => {
+      try {
+        const data = JSON.parse(body || '{}');
+        const notionToken = process.env.NOTION_TOKEN;
+        const questionSetId = data.questionSetId;
+
+        if (!notionToken || !questionSetId) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Missing NOTION_TOKEN or questionSetId' }));
+          return;
+        }
+
+        const headers = {
+          'Authorization': `Bearer ${notionToken}`,
+          'Notion-Version': '2022-06-28',
+          'Content-Type': 'application/json'
+        };
+
+        const qDbId = '8aa4565541fd4e49b157c6ebbc1d7ea7';
+        const optDbId = '1c80472918b54f7190d2d1259d7c7a9e';
+        const respDbId = 'd120bddac12646d490a8d9fa02a800d2';
+
+        let deletedQuestionsCount = 0;
+        let deletedOptionsCount = 0;
+        let deletedResponsesCount = 0;
+
+        // 1. Find all Questions linked to this Question Set
+        const qQueryRes = await fetch(`https://api.notion.com/v1/databases/${qDbId}/query`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            filter: {
+              property: 'Question set',
+              relation: {
+                contains: questionSetId
+              }
+            }
+          })
+        });
+
+        const qQueryData = await qQueryRes.json();
+        const questions = qQueryData.results || [];
+
+        // 2. For each Question, find its Answer Options and Responses, then archive them
+        for (const qPage of questions) {
+          const qId = qPage.id;
+
+          // Find Answer Options for this question
+          const optQueryRes = await fetch(`https://api.notion.com/v1/databases/${optDbId}/query`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({
+              filter: {
+                property: 'Question',
+                relation: {
+                  contains: qId
+                }
+              }
+            })
+          });
+          const optQueryData = await optQueryRes.json();
+          const options = optQueryData.results || [];
+
+          for (const optPage of options) {
+            await fetch(`https://api.notion.com/v1/pages/${optPage.id}`, {
+              method: 'PATCH',
+              headers,
+              body: JSON.stringify({ archived: true })
+            });
+            deletedOptionsCount++;
+          }
+
+          // Find Responses for this question
+          const respQueryRes = await fetch(`https://api.notion.com/v1/databases/${respDbId}/query`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({
+              filter: {
+                property: 'Question',
+                relation: {
+                  contains: qId
+                }
+              }
+            })
+          });
+          const respQueryData = await respQueryRes.json();
+          const responses = respQueryData.results || [];
+
+          for (const respPage of responses) {
+            await fetch(`https://api.notion.com/v1/pages/${respPage.id}`, {
+              method: 'PATCH',
+              headers,
+              body: JSON.stringify({ archived: true })
+            });
+            deletedResponsesCount++;
+          }
+
+          // Archive the Question page
+          await fetch(`https://api.notion.com/v1/pages/${qId}`, {
+            method: 'PATCH',
+            headers,
+            body: JSON.stringify({ archived: true })
+          });
+          deletedQuestionsCount++;
+        }
+
+        // 3. Archive the Question Set page itself
+        const setArchiveRes = await fetch(`https://api.notion.com/v1/pages/${questionSetId}`, {
+          method: 'PATCH',
+          headers,
+          body: JSON.stringify({ archived: true })
+        });
+
+        if (!setArchiveRes.ok) {
+          const setErr = await setArchiveRes.json();
+          res.writeHead(setArchiveRes.status, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: setErr.message || 'Failed to archive Question Set in Notion' }));
+          return;
+        }
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          success: true,
+          questionSetId,
+          deletedCounts: {
+            questions: deletedQuestionsCount,
+            options: deletedOptionsCount,
+            responses: deletedResponsesCount
+          }
+        }));
+
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: err.message }));
+      }
+    });
+    return;
+  }
+
   // API endpoint: Pre-persist new Question Set, Questions, and Options in Notion
   if (pathname === '/api/notion/create-question-set' && req.method === 'POST') {
     let body = '';
@@ -1338,7 +1481,25 @@ Return ONLY valid JSON matching this schema:
           return;
         }
 
-        const results = (searchData.results || []).map(item => {
+        const internalSubDbs = [
+          '8aa4565541fd4e49b157c6ebbc1d7ea7',
+          '8aa45655-41fd-4e49-b157-c6ebbc1d7ea7',
+          '1c80472918b54f7190d2d1259d7c7a9e',
+          '1c804729-18b5-4f71-90d2-d1259d7c7a9e',
+          'd120bddac12646d490a8d9fa02a800d2',
+          'd120bdda-c126-46d4-90a8-d9fa02a800d2'
+        ];
+
+        const results = (searchData.results || [])
+          .filter(item => {
+            // Keep all standalone databases
+            if (item.object === 'database') return true;
+            // Exclude granular database row pages from the internal Questions, Options, and Responses databases
+            const parentDb = item.parent?.database_id;
+            if (parentDb && internalSubDbs.includes(parentDb)) return false;
+            return true;
+          })
+          .map(item => {
           let title = 'Untitled';
           if (item.title && Array.isArray(item.title) && item.title.length > 0) {
             title = item.title.map(t => t.plain_text).join('');
@@ -1366,6 +1527,292 @@ Return ONLY valid JSON matching this schema:
 
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ success: true, results }));
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: err.message }));
+      }
+    });
+    return;
+  }
+
+  // API endpoint: Fetch vault tabs from Notion Parent Tab property
+  if (pathname === '/api/notion/vault-tabs' && req.method === 'GET') {
+    try {
+      const notionToken = process.env.NOTION_TOKEN;
+      const vaultDbId = process.env.NOTION_VAULT_DATABASE_ID || '412138c820f38190b661cc316102d4fc';
+
+      if (!notionToken) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Missing NOTION_TOKEN in .env' }));
+        return;
+      }
+
+      const dbRes = await fetch(`https://api.notion.com/v1/databases/${vaultDbId}`, {
+        headers: {
+          'Authorization': `Bearer ${notionToken}`,
+          'Notion-Version': '2022-06-28'
+        }
+      });
+      const dbData = await dbRes.json();
+      if (!dbRes.ok) {
+        res.writeHead(dbRes.status, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: dbData.message || 'Failed to fetch database' }));
+        return;
+      }
+
+      const options = dbData.properties?.['Parent Tab']?.select?.options || [
+        { name: 'Working Style & Skills', color: 'blue' },
+        { name: 'Limits & Health', color: 'red' },
+        { name: 'Personality & Traits', color: 'purple' },
+        { name: 'Custom Directives', color: 'green' }
+      ];
+
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: true, tabs: options }));
+    } catch (err) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: err.message }));
+    }
+    return;
+  }
+
+  // API endpoint: Manage vault tabs (create, rename, delete) and mirror to Notion
+  if (pathname === '/api/notion/vault-tabs' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', async () => {
+      try {
+        const data = JSON.parse(body || '{}');
+        const notionToken = process.env.NOTION_TOKEN;
+        const vaultDbId = process.env.NOTION_VAULT_DATABASE_ID || '412138c820f38190b661cc316102d4fc';
+        const { action, tabName, newTabName, color } = data;
+
+        if (!notionToken) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Missing NOTION_TOKEN in .env' }));
+          return;
+        }
+
+        const headers = {
+          'Authorization': `Bearer ${notionToken}`,
+          'Notion-Version': '2022-06-28',
+          'Content-Type': 'application/json'
+        };
+
+        // 1. Fetch current database schema
+        const dbRes = await fetch(`https://api.notion.com/v1/databases/${vaultDbId}`, { headers });
+        const dbData = await dbRes.json();
+        if (!dbRes.ok) {
+          res.writeHead(dbRes.status, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: dbData.message || 'Failed to fetch database schema' }));
+          return;
+        }
+
+        let currentOptions = dbData.properties?.['Parent Tab']?.select?.options || [];
+
+        if (action === 'create') {
+          const cleanName = (tabName || '').trim();
+          if (!cleanName) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Tab name cannot be empty' }));
+            return;
+          }
+
+          if (!currentOptions.some(o => o.name.toLowerCase() === cleanName.toLowerCase())) {
+            const colors = ['blue', 'purple', 'green', 'orange', 'pink', 'red', 'yellow'];
+            const randomColor = color || colors[Math.floor(Math.random() * colors.length)];
+            currentOptions.push({ name: cleanName, color: randomColor });
+
+            await fetch(`https://api.notion.com/v1/databases/${vaultDbId}`, {
+              method: 'PATCH',
+              headers,
+              body: JSON.stringify({
+                properties: {
+                  'Parent Tab': {
+                    select: {
+                      options: currentOptions.map(o => ({ name: o.name, color: o.color }))
+                    }
+                  }
+                }
+              })
+            });
+          }
+        } else if (action === 'rename') {
+          const oldName = (tabName || '').trim();
+          const targetName = (newTabName || '').trim();
+          if (!oldName || !targetName) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Old and new tab names are required' }));
+            return;
+          }
+
+          currentOptions = currentOptions.map(o => {
+            if (o.name === oldName) return { ...o, name: targetName };
+            return o;
+          });
+
+          // Update DB schema
+          await fetch(`https://api.notion.com/v1/databases/${vaultDbId}`, {
+            method: 'PATCH',
+            headers,
+            body: JSON.stringify({
+              properties: {
+                'Parent Tab': {
+                  select: {
+                    options: currentOptions.map(o => ({ name: o.name, color: o.color }))
+                  }
+                }
+              }
+            })
+          });
+
+          // Also update all existing rows assigned to oldName
+          const queryRes = await fetch(`https://api.notion.com/v1/databases/${vaultDbId}/query`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({
+              filter: {
+                property: 'Parent Tab',
+                select: { equals: oldName }
+              }
+            })
+          });
+          const queryData = await queryRes.json();
+          for (const row of (queryData.results || [])) {
+            await fetch(`https://api.notion.com/v1/pages/${row.id}`, {
+              method: 'PATCH',
+              headers,
+              body: JSON.stringify({
+                properties: {
+                  'Parent Tab': { select: { name: targetName } }
+                }
+              })
+            });
+          }
+        } else if (action === 'delete') {
+          const deleteName = (tabName || '').trim();
+          currentOptions = currentOptions.filter(o => o.name !== deleteName);
+
+          // Update DB schema
+          await fetch(`https://api.notion.com/v1/databases/${vaultDbId}`, {
+            method: 'PATCH',
+            headers,
+            body: JSON.stringify({
+              properties: {
+                'Parent Tab': {
+                  select: {
+                    options: currentOptions.map(o => ({ name: o.name, color: o.color }))
+                  }
+                }
+              }
+            })
+          });
+
+          // Soft delete all rows in this tab
+          const queryRes = await fetch(`https://api.notion.com/v1/databases/${vaultDbId}/query`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({
+              filter: {
+                property: 'Parent Tab',
+                select: { equals: deleteName }
+              }
+            })
+          });
+          const queryData = await queryRes.json();
+          for (const row of (queryData.results || [])) {
+            await fetch(`https://api.notion.com/v1/pages/${row.id}`, {
+              method: 'PATCH',
+              headers,
+              body: JSON.stringify({
+                properties: {
+                  'Status': { select: { name: 'Deleted' } }
+                }
+              })
+            });
+          }
+        }
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true, tabs: currentOptions }));
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: err.message }));
+      }
+    });
+    return;
+  }
+
+  // API endpoint: Create or Add a Vault Block directly into Notion Master Vault
+  if (pathname === '/api/notion/create-vault-block' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', async () => {
+      try {
+        const data = JSON.parse(body || '{}');
+        const notionToken = process.env.NOTION_TOKEN;
+        const vaultDbId = process.env.NOTION_VAULT_DATABASE_ID || '412138c820f38190b661cc316102d4fc';
+
+        if (!notionToken) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Missing NOTION_TOKEN in .env' }));
+          return;
+        }
+
+        const blockText = (data.text || '').trim();
+        const parentTab = data.parentTab || 'Working Style & Skills';
+        const headingGroup = data.headingGroup || 'General';
+        const isPinned = !!data.isPinned;
+        const todayStr = new Date().toISOString().split('T')[0];
+        const blockUniqueId = data.blockId || `CTX-${Date.now()}-${Math.floor(Math.random()*1000)}`;
+
+        const headers = {
+          'Authorization': `Bearer ${notionToken}`,
+          'Notion-Version': '2022-06-28',
+          'Content-Type': 'application/json'
+        };
+
+        const pageRes = await fetch('https://api.notion.com/v1/pages', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            parent: { database_id: vaultDbId },
+            properties: {
+              'Context Block': { title: [{ text: { content: blockText.slice(0, 1900) } }] },
+              'Block ID': { rich_text: [{ text: { content: blockUniqueId } }] },
+              'Parent Tab': { select: { name: parentTab } },
+              'Heading Title Group': { select: { name: headingGroup } },
+              'Status': { select: { name: isPinned ? 'Pinned' : 'New' } },
+              'Is Pinned': { checkbox: isPinned },
+              'Date Generated': { date: { start: todayStr } },
+              'Source Pages': { rich_text: [{ text: { content: data.sourcePages || 'Manual Entry' } }] }
+            }
+          })
+        });
+
+        const pageData = await pageRes.json();
+        if (!pageRes.ok) {
+          res.writeHead(pageRes.status, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: pageData.message || 'Failed to create block in Notion' }));
+          return;
+        }
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          success: true,
+          block: {
+            id: pageData.id,
+            blockId: blockUniqueId,
+            text: blockText,
+            parentTab,
+            headingGroup,
+            status: isPinned ? 'Pinned' : 'New',
+            isPinned,
+            dateGenerated: todayStr,
+            sourcePages: data.sourcePages || 'Manual Entry'
+          }
+        }));
+
       } catch (err) {
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: err.message }));
@@ -1652,7 +2099,10 @@ TASK:
 Extract and synthesize high-density, atomic, line-by-line context bullets/blocks for the "${parentTab}" profile tab.
 Group the bullets into logical heading categories appropriate for this tab:
 - For "Working Style & Skills": use headings like "Core Skills", "Reported Interests", "Working Preferences", "Cognitive Architecture", etc.
-- For other tabs: choose clean, meaningful 2-3 word section headings.
+- For "Limits & Health": use headings like "Health Boundaries", "Operational Non-Negotiables", "Budget & Resource Caps", "Schedule & Time Allocations", etc.
+- For "Personality & Traits": use headings like "Personality Profile", "Cognitive Biases & Strengths", "Communication Style", "Core Philosophies", etc.
+- For "Custom Directives": use headings like "Strategic Directives", "Project Artifacts & References", "Custom Rules", "Domain Expertise", etc.
+- If unsure: choose clean, meaningful 2-3 word section headings matching the theme.
 
 Return ONLY a valid JSON object matching this schema (no markdown formatting, no backticks):
 {
@@ -1707,8 +2157,8 @@ Return ONLY a valid JSON object matching this schema (no markdown formatting, no
           ];
         }
 
-        // 3. Persist each new block into Notion Master Profile & Context Vault Database
-        const newBlocksResult = [];
+        // 3. Instead of automatically writing pages to Notion, return candidate blocks for user review & selection
+        const candidateBlocks = [];
         const todayStr = new Date().toISOString().split('T')[0];
         const sourcePagesStr = sourceTitles.join(', ').slice(0, 1900);
 
@@ -1718,53 +2168,27 @@ Return ONLY a valid JSON object matching this schema (no markdown formatting, no
             const cleanText = String(blockText).trim();
             if (!cleanText) continue;
 
-            const blockUniqueId = `CTX-${Date.now()}-${Math.floor(Math.random()*1000)}`;
-            try {
-              const pageRes = await fetch('https://api.notion.com/v1/pages', {
-                method: 'POST',
-                headers,
-                body: JSON.stringify({
-                  parent: { database_id: vaultDbId },
-                  properties: {
-                    'Context Block': { title: [{ text: { content: cleanText.slice(0, 1900) } }] },
-                    'Block ID': { rich_text: [{ text: { content: blockUniqueId } }] },
-                    'Parent Tab': { select: { name: parentTab } },
-                    'Heading Title Group': { select: { name: heading } },
-                    'Status': { select: { name: 'New' } },
-                    'Is Pinned': { checkbox: false },
-                    'Date Generated': { date: { start: todayStr } },
-                    'Source Pages': { rich_text: [{ text: { content: sourcePagesStr } }] }
-                  }
-                })
-              });
-              const pageData = await pageRes.json();
-
-              newBlocksResult.push({
-                id: pageData.id || blockUniqueId,
-                blockId: blockUniqueId,
-                text: cleanText,
-                parentTab: parentTab,
-                headingGroup: heading,
-                status: 'New',
-                isPinned: false,
-                dateGenerated: todayStr,
-                sourcePages: sourcePagesStr,
-                headingDescription: grp.headingDescription || ''
-              });
-            } catch (err) {
-              console.warn('Error inserting vault block to Notion:', err.message);
-            }
+            const blockUniqueId = `CAND-${Date.now()}-${Math.floor(Math.random()*1000)}`;
+            candidateBlocks.push({
+              id: blockUniqueId,
+              blockId: blockUniqueId,
+              text: cleanText,
+              parentTab: parentTab,
+              headingGroup: heading,
+              status: 'Candidate',
+              isPinned: false,
+              dateGenerated: todayStr,
+              sourcePages: sourcePagesStr,
+              headingDescription: grp.headingDescription || ''
+            });
           }
         }
-
-        // Combine with preserved pinned blocks
-        const finalBlocks = [...pinnedBlocks, ...newBlocksResult];
 
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({
           success: true,
-          headingGroups: generatedGroups,
-          blocks: finalBlocks
+          candidateBlocks: candidateBlocks,
+          headingGroups: generatedGroups
         }));
 
       } catch (err) {
@@ -1796,6 +2220,32 @@ Return ONLY a valid JSON object matching this schema (no markdown formatting, no
         const userGoal = data.goal || 'General project planning';
         const numQuestions = data.numQuestions || 8;
         const masterContext = data.masterContext || '';
+        const notionToken = process.env.NOTION_TOKEN;
+        const selectedNotionSources = data.selectedNotionSources || []; // [{ id, title, object }]
+
+        // Fetch text from any selected Notion Workspace pages/databases or AI summaries
+        let notionContextCorpus = '';
+        if (notionToken && selectedNotionSources.length > 0) {
+          const headers = {
+            'Authorization': `Bearer ${notionToken}`,
+            'Notion-Version': '2022-06-28',
+            'Content-Type': 'application/json'
+          };
+          for (const src of selectedNotionSources) {
+            notionContextCorpus += `\n\n=== NOTION GROUNDING SOURCE: [${src.object.toUpperCase()}] ${src.title} ===\n`;
+            try {
+              if (src.object === 'database') {
+                const dbSummary = await fetchNotionDatabaseSummary(src.id, headers);
+                notionContextCorpus += dbSummary || '(Empty database)';
+              } else {
+                const pageText = await fetchNotionPageText(src.id, headers);
+                notionContextCorpus += pageText || '(Empty page)';
+              }
+            } catch (err) {
+              console.warn(`Failed to read Notion source ${src.title}:`, err.message);
+            }
+          }
+        }
 
         const systemInstruction = `You are an expert diagnostic interviewer and requirements architect.
 For the user's initiative: "${userGoal}", produce:
@@ -1804,6 +2254,7 @@ For the user's initiative: "${userGoal}", produce:
 
 Master background context available about user:
 ${masterContext || 'None provided'}
+${notionContextCorpus ? `\nActive Workspace Knowledge & Grounding Documents:\n${notionContextCorpus.slice(0, 16000)}` : ''}
 
 RULES:
 1. Return ONLY a valid JSON object matching this schema (no markdown code blocks, no backticks, no commentary):
@@ -1821,7 +2272,8 @@ RULES:
   ]
 }
 2. Mix question types effectively: use choice questions with 3-5 distinct options, "textarea" for complex context or trade-offs, and "text" for short specifics.
-3. Craft questions that directly clarify trade-offs, constraints, timeline, preferences, and deliverables.`;
+3. If Notion workspace documents or reports are provided above, directly integrate and reflect their specific concepts, constraints, entities, and requirements into the questions so the questions are deeply informed by the user's workspace.
+4. Craft questions that directly clarify trade-offs, constraints, timeline, preferences, and deliverables.`;
 
         const requestPayload = {
           contents: [{ role: 'user', parts: [{ text: `Generate diagnostic questionnaire for: ${userGoal}` }] }],
@@ -1944,6 +2396,43 @@ RULES:
           text: candidateText,
           raw: geminiJson
         }));
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: err.message }));
+      }
+    });
+    return;
+  }
+
+  // API endpoint: Get change notes
+  if (pathname === '/api/change-notes' && req.method === 'GET') {
+    try {
+      const notesPath = path.join(__dirname, 'change_notes.json');
+      let notes = [];
+      if (fs.existsSync(notesPath)) {
+        notes = JSON.parse(fs.readFileSync(notesPath, 'utf8') || '[]');
+      }
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: true, notes }));
+    } catch (err) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: err.message }));
+    }
+    return;
+  }
+
+  // API endpoint: Save change notes
+  if (pathname === '/api/change-notes' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', () => {
+      try {
+        const data = JSON.parse(body || '{}');
+        const notes = data.notes || [];
+        const notesPath = path.join(__dirname, 'change_notes.json');
+        fs.writeFileSync(notesPath, JSON.stringify(notes, null, 2), 'utf8');
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true, count: notes.length }));
       } catch (err) {
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: err.message }));
