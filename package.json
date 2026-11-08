@@ -1,0 +1,14 @@
+{
+  "name": "dynamic-context-questionnaire",
+  "version": "1.0.0",
+  "description": "Dynamic Context Questionnaire & Gemini Assistant Prototype",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": ["gemini", "antigravity", "questionnaire", "prompt-engineering"],
+  "author": "",
+  "license": "MIT"
+}
+

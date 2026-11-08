@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ContextFlow — Dynamic Context Questionnaire & Gemini Engine</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-layout">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="header-left">
+        <div class="logo-mark">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+          </svg>
+        </div>
+        <div>
+          <h1 class="app-title">ContextFlow</h1>
+          <p class="app-subtitle">Dynamic Context Questionnaire & Personal Knowledge Engine</p>
+        </div>
+      </div>
+
+      <div class="header-right">
+        <button id="history-btn" class="btn btn-secondary">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          History
+          <span id="history-count" class="badge-pill">0</span>
+        </button>
+        <button id="vault-btn" class="btn btn-secondary">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          Master Profile Vault
+          <span id="vault-indicator" class="status-dot active" title="Profile Loaded"></span>
+        </button>
+        <button id="settings-btn" class="btn btn-secondary">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          API Config
+        </button>
+      </div>
+    </header>
+
+    <!-- Workflow Selector & Grouped Categories Bar -->
+    <nav class="workflow-navigator-container">
+      <div class="category-header-row">
+        <div class="category-chips-scroll" id="category-chips">
+          <!-- Dynamically populated category chips (e.g. All, Clothing Preferences, Career, Productivity) -->
+        </div>
+        <div class="category-header-actions">
+          <button id="toggle-grouped-hub-btn" class="btn btn-secondary text-xs" title="View all Question Sets grouped by category">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+            Grouped Sets Hub
+          </button>
+          <button id="custom-generator-btn" class="btn btn-sparkle" title="Generate custom questions with AI">
+            ✨ AI Question Generator
+          </button>
+        </div>
+      </div>
+
+      <!-- Question Sets Tabs for Active Category -->
+      <div class="tabs-scroll mt-2" id="workflow-tabs">
+        <!-- Rendered dynamically -->
+      </div>
+
+      <!-- Expandable Grouped Question Sets Hub -->
+      <div id="grouped-sets-hub" class="grouped-sets-hub hidden">
+        <div class="grouped-sets-hub-header">
+          <div class="grouped-hub-title">
+            <span>📂</span> Question Sets Directory (Grouped by Category)
+          </div>
+          <button id="close-grouped-hub-btn" class="btn btn-ghost text-xs">&times; Close</button>
+        </div>
+        <div class="grouped-categories-grid" id="grouped-categories-grid">
+          <!-- Dynamically populated with category groups and cards -->
+        </div>
+      </div>
+    </nav>
+
+    <!-- Main Workspace Area -->
+    <main class="main-content">
+      <!-- Questionnaire View -->
+      <section id="questionnaire-view" class="view-panel active">
+        <div class="card questionnaire-card">
+          <!-- Card Header & Progress -->
+          <div class="card-top">
+            <!-- Notion Relational Context Banner -->
+            <div class="notion-context-banner" id="notion-context-banner">
+              <div class="notion-context-left">
+                <span class="notion-pill" id="notion-sync-pill">
+                  <span class="pulse-indicator"></span> Notion Synced
+                </span>
+                <span class="status-pill status-ready" id="set-status-pill">Ready for Responses</span>
+                <span class="set-name-badge" id="set-name-badge">Question Set</span>
+                <span class="expanded-badge hidden" id="expanded-from-badge">
+                  ↳ Expanded from: <strong id="parent-set-name">Parent</strong>
+                </span>
+              </div>
+              <div class="notion-context-right">
+                <a id="open-notion-set-link" href="#" target="_blank" rel="noopener" class="btn btn-ghost text-xs" style="color: #a78bfa; text-decoration: none;">
+                  Open in Notion ↗
+                </a>
+              </div>
+            </div>
+
+            <div class="workflow-badge-row mt-2" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+              <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                <span id="current-workflow-badge" class="badge">Workflow</span>
+                <span id="workflow-progress-pill" class="status-pill status-ready">4 to answer</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 0.75rem;">
+                <span id="remaining-counter" class="text-xs text-muted" style="font-weight: 600;">3 questions left</span>
+                <span id="step-counter" class="step-counter">Question 1 of 5</span>
+              </div>
+            </div>
+            <div class="progress-bar-track">
+              <div id="progress-bar-fill" class="progress-bar-fill" style="width: 20%;"></div>
+            </div>
+          </div>
+
+          <!-- Dynamic Question Body -->
+          <div class="question-content">
+            <div class="question-header-row" style="display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; flex-wrap: wrap;">
+              <div style="flex: 1; min-width: 250px;">
+                <h2 id="question-label" class="question-label">Loading question...</h2>
+                <p id="question-help" class="question-help">Explanation or tips will appear here.</p>
+              </div>
+              <div style="display: flex; gap: 0.5rem; align-items: center;">
+                <button id="generate-hints-btn" class="btn btn-secondary text-xs" style="border-color: #8b5cf6; color: #c4b5fd; display: flex; align-items: center; gap: 0.4rem; white-space: nowrap;">
+                  <span>✨</span> Notion AI Hints & Fit Scores
+                </button>
+              </div>
+            </div>
+
+            <!-- Notion Context Box -->
+            <div id="question-context-box" class="question-context-box hidden">
+              <div class="context-box-title"><span>❖ Notion Workspace Context:</span></div>
+              <div id="question-context-text" class="context-box-content"></div>
+            </div>
+
+            <div id="input-container" class="input-container">
+              <!-- Rendered dynamically -->
+            </div>
+          </div>
+
+          <!-- Navigation Controls -->
+          <div class="card-footer">
+            <button id="prev-btn" class="btn btn-ghost" disabled>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+              Back
+            </button>
+            <div class="footer-center">
+              <button id="add-similar-question-btn" class="btn btn-secondary text-xs" title="Generate a related question and queue it in Notion immediately">
+                ⚡ Add Similar Question
+              </button>
+              <button id="inspect-btn" class="btn btn-link text-xs">Inspect Payload</button>
+            </div>
+            <button id="next-btn" class="btn btn-primary">
+              Next
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Processing & Output View -->
+      <section id="output-view" class="view-panel hidden">
+        <div class="card output-card">
+          <div class="output-header">
+            <div class="output-header-left">
+              <div id="output-status-spinner" class="spinner"></div>
+              <div>
+                <h2 id="output-title" class="output-title">Generating Response with Gemini...</h2>
+                <p id="output-subtitle" class="output-subtitle">Synthesizing questionnaire answers with your Master Profile</p>
+              </div>
+            </div>
+            <div class="output-actions">
+              <button id="restart-btn" class="btn btn-secondary">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/></svg>
+                Edit Answers
+              </button>
+              <button id="export-notion-responses-btn" class="btn btn-secondary" title="Export structured answers to your Notion Responses database (Draft Source)" style="border-color: #8b5cf6; color: #c4b5fd;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+                Export Answers to Notion DB
+              </button>
+              <button id="push-notion-btn" class="btn btn-secondary" title="Export page directly to your Notion database">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M4.459 4.208c.746.606 1.026.56 2.428.466l13.215-.793c.28 0 .047-.28-.046-.326L17.86 1.968c-.42-.326-.981-.7-2.055-.607L3.01 2.295c-.466.046-.56.28-.374.466zm.793 3.08v13.904c0 .747.373 1.027 1.213.98l14.523-.84c.84-.046.933-.56.933-1.167V6.354c0-.606-.233-.933-.793-.886l-15.083.886c-.56.047-.793.374-.793.934zm13.996 1.353c.094.42 0 .84-.42.887l-.7.14v8.865c-.56.327-1.12.513-1.633.513-.84 0-1.073-.28-1.727-1.073l-5.086-7.886v7.326l1.493.327c.093.046.14.373.047.746-.14.467-.42.56-1.027.607l-3.36.186c-.093-.047-.046-.42.047-.747l1.027-.233V9.537l-1.307-.14c-.093-.047-.14-.42-.047-.793.14-.467.467-.607 1.027-.654l3.547-.233 5.413 8.353V9.677l-1.307-.14c-.093-.047-.14-.42-.046-.794.14-.466.466-.606 1.073-.653l3.08-.187z"/></svg>
+                Push to Notion
+              </button>
+              <button id="copy-output-btn" class="btn btn-secondary">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                Copy
+              </button>
+              <button id="download-output-btn" class="btn btn-secondary">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Export .md
+              </button>
+            </div>
+          </div>
+
+          <div id="output-content" class="output-content markdown-body">
+            <p class="placeholder-text">Waiting for Gemini to compile and return your deliverable...</p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- AI Custom Question Generator Modal -->
+    <div id="generator-modal" class="modal hidden">
+      <div class="modal-backdrop"></div>
+      <div class="modal-dialog">
+        <div class="modal-header">
+          <div class="modal-header-icon sparkle-icon">
+            ✨
+          </div>
+          <div>
+            <h3 class="modal-title">AI Dynamic Questionnaire Generator</h3>
+            <p class="modal-subtitle">Have Gemini design a tailored, multi-question diagnostic questionnaire for any custom goal or initiative.</p>
+          </div>
+          <button class="modal-close" id="close-generator-modal">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="form-label" for="generator-goal-input">What initiative or decision do you want to explore?</label>
+            <textarea id="generator-goal-input" class="form-textarea" rows="3" placeholder="e.g. Ask me 10 questions to determine the best micro-SaaS product to build based on my skills and health limitations..."></textarea>
+          </div>
+
+          <div class="form-row mt-3">
+            <div class="form-group flex-1">
+              <label class="form-label" for="generator-num-questions">Number of Questions</label>
+              <select id="generator-num-questions" class="form-select">
+                <option value="5">5 Quick Questions (Rapid Check)</option>
+                <option value="8" selected>8 Questions (Standard Diagnostic)</option>
+                <option value="12">12 Questions (Deep Architecture)</option>
+                <option value="15">15 Questions (Comprehensive Audit)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button id="run-generator-btn" class="btn btn-primary">
+            <span id="gen-spinner" class="spinner-sm hidden"></span>
+            Generate Dynamic Questionnaire
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Master Context Vault Modal -->
+    <div id="vault-modal" class="modal hidden">
+      <div class="modal-backdrop"></div>
+      <div class="modal-dialog modal-lg">
+        <div class="modal-header">
+          <div class="modal-header-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          </div>
+          <div>
+            <h3 class="modal-title">Master Profile & Context Vault</h3>
+            <p class="modal-subtitle">Your personal preferences, skill database, limitations, and personality reports. Automatically injected as grounded context for every questionnaire run.</p>
+          </div>
+          <button class="modal-close" id="close-vault-modal">&times;</button>
+        </div>
+
+        <div class="modal-body">
+          <!-- Notion Sources & Artifacts Selector & Blocks View Controls -->
+          <div class="vault-toolbar" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+              <button id="toggle-sources-picker-btn" class="btn btn-secondary text-xs" style="border-color: #8b5cf6; color: #c4b5fd;">
+                📁 Select Notion Pages & Artifacts (<span id="selected-sources-count">0</span>)
+              </button>
+              <button id="add-vault-heading-btn" class="btn btn-ghost text-xs" style="color: #94a3b8;">
+                + Add Section Header
+              </button>
+            </div>
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+              <span class="text-xs text-muted">Filter:</span>
+              <select id="vault-blocks-filter" class="form-select text-xs" style="width: auto; padding: 4px 8px;">
+                <option value="all">All Blocks</option>
+                <option value="pinned">📌 Pinned Only</option>
+                <option value="edited">✏️ Edited</option>
+                <option value="new">✨ New</option>
+              </select>
+              <button id="toggle-vault-view-mode-btn" class="btn btn-ghost text-xs" title="Toggle between Interactive Blocks and Raw Text">
+                View: <strong>Blocks</strong>
+              </button>
+            </div>
+          </div>
+
+          <!-- Collapsible Notion Sources Panel -->
+          <div id="notion-sources-panel" class="notion-sources-panel hidden">
+            <div class="notion-sources-header">
+              <span>❖ Search & Select Notion Pages / Databases as Grounding Artifacts</span>
+              <button id="close-sources-panel-btn" class="modal-close" style="font-size: 1.1rem; line-height: 1;">&times;</button>
+            </div>
+            <div class="notion-search-row">
+              <input type="text" id="notion-source-search-input" placeholder="Type to search Notion workspace for pages, databases, documents..." class="form-input text-xs" style="flex: 1;">
+              <button id="notion-search-btn" class="btn btn-secondary text-xs">Search Notion</button>
+            </div>
+            <div id="notion-search-results" class="notion-search-results hidden"></div>
+            <div>
+              <span class="text-xs text-muted" style="font-weight: 600;">Selected Sources:</span>
+              <div id="selected-sources-chips" class="selected-sources-chips">
+                <span class="text-xs text-muted" id="no-sources-selected-text">No sources selected yet. Search above to pick pages or databases.</span>
+              </div>
+            </div>
+            <button id="generate-vault-blocks-btn" class="btn btn-sparkle text-xs" style="width: 100%; margin-top: 0.35rem;" disabled>
+              ✨ Generate Structured Context Blocks from Selected Notion Sources
+            </button>
+          </div>
+
+          <div class="vault-tabs">
+            <button class="vault-tab active" data-vault-tab="skills_and_work">Working Style & Skills</button>
+            <button class="vault-tab" data-vault-tab="limits_and_health">Limitations & Non-Negotiables</button>
+            <button class="vault-tab" data-vault-tab="personality_reports">Personality & Cognition</button>
+            <button class="vault-tab" data-vault-tab="custom_doc">Google Doc / Custom Context</button>
+          </div>
+
+          <div class="vault-content">
+            <!-- Tab 1 -->
+            <div id="tab-skills_and_work" class="vault-panel active">
+              <label class="form-label" style="display: flex; justify-content: space-between; align-items: center;">
+                <span>Core Skills, Strengths & Working Preferences</span>
+                <span class="text-xs text-muted" style="font-weight: normal;">Synced with Notion Master Context Vault Database</span>
+              </label>
+
+              <!-- Interactive Blocks Organizer Canvas -->
+              <div id="vault-blocks-organizer" class="vault-blocks-organizer"></div>
+
+              <textarea id="vault-skills" class="form-textarea hidden mt-2" rows="8" placeholder="e.g.
+- Skills: Systems Architecture, Notion Database Design, Process Automation, Technical Writing
+- Strengths: Deep conceptual synthesis, rapid prototyping, spotting bottlenecks
+- Working Preferences: Asynchronous communication preferred, deep uninterrupted blocks, high-autonomy environments."></textarea>
+            </div>
+
+            <!-- Tab 2 -->
+            <div id="tab-limits_and_health" class="vault-panel hidden">
+              <label class="form-label">Health, Schedule, Budget & Strict Non-Negotiables</label>
+              <textarea id="vault-limits" class="form-textarea" rows="8" placeholder="e.g.
+- Must-Haves: Remote-friendly, self-paced learning, high earning upside relative to barrier
+- Must-Nots: Rigid 9-to-5 synchronous call marathons, unbacked buzzword bureaucracy
+- Health / Constraints: Screen fatigue considerations, maximum 15 hours/week for study or side builds."></textarea>
+            </div>
+
+            <!-- Tab 3 -->
+            <div id="tab-personality_reports" class="vault-panel hidden">
+              <label class="form-label">Personality Type Quizzes, Behavioral Traits & Opinions</label>
+              <textarea id="vault-personality" class="form-textarea" rows="8" placeholder="e.g.
+- Personality: INTJ / Strategic Visionary with Builder execution bias
+- Communication Style: Direct, structured, low fluff, high clarity
+- Opinions & Philosophy: Value leverage through tooling and software over raw brute force labor."></textarea>
+            </div>
+
+            <!-- Tab 4 -->
+            <div id="tab-custom_doc" class="vault-panel hidden">
+              <label class="form-label">Paste Google Doc / External Context Pack</label>
+              <p class="text-xs text-muted mb-2">Paste raw text from your Google Doc (<code>https://docs.google.com/document/d/1c19GMdoYax5z...</code>) or notes here:</p>
+              <textarea id="vault-custom-doc" class="form-textarea" rows="8" placeholder="Paste comprehensive notes, resumes, or context packs here..."></textarea>
+            </div>
+
+            <!-- File Drop / Upload Box -->
+            <div class="file-drop-area mt-3">
+              <input type="file" id="vault-file-input" accept=".txt,.md,.json,.csv" style="display:none">
+              <div class="drop-zone-content" id="drop-zone">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                <span>Click or drag-and-drop a file (<code>.txt, .md, .json</code>) to append into active tab</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center; width: 100%; flex-wrap: wrap; gap: 0.75rem;">
+          <div style="display: flex; align-items: center; gap: 0.6rem;">
+            <button id="compile-vault-notion-btn" class="btn btn-secondary" style="border-color: #8b5cf6; color: #c4b5fd;">
+              🔄 Compile Vault from Notion Responses
+            </button>
+            <span id="vault-notion-status" class="text-xs text-muted">Auto-aggregates all Notion sets & responses</span>
+          </div>
+          <div style="display: flex; gap: 0.5rem;">
+            <button id="load-sample-vault-btn" class="btn btn-secondary">Load Sample Profile</button>
+            <button id="save-vault-btn" class="btn btn-primary">Save to Vault</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- History Modal -->
+    <div id="history-modal" class="modal hidden">
+      <div class="modal-backdrop"></div>
+      <div class="modal-dialog modal-lg">
+        <div class="modal-header">
+          <div>
+            <h3 class="modal-title">Past Deliverables & History</h3>
+            <p class="modal-subtitle">Review previous generated deliverables without re-running the questionnaire.</p>
+          </div>
+          <button class="modal-close" id="close-history-modal">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div id="history-list" class="history-list">
+            <p class="placeholder-text">No past deliverables saved yet. Complete a questionnaire to see it here.</p>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button id="clear-history-btn" class="btn btn-ghost text-xs">Clear History</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Payload Inspector Modal -->
+    <div id="payload-modal" class="modal hidden">
+      <div class="modal-backdrop"></div>
+      <div class="modal-dialog">
+        <div class="modal-header">
+          <div>
+            <h3 class="modal-title">Compiled Context Payload</h3>
+            <p class="modal-subtitle">Exact JSON package and prompt that will be dispatched to Gemini.</p>
+          </div>
+          <button class="modal-close" id="close-payload-modal">&times;</button>
+        </div>
+        <div class="modal-body">
+          <pre id="payload-preview" class="code-preview"></pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="modal hidden">
+      <div class="modal-backdrop"></div>
+      <div class="modal-dialog">
+        <div class="modal-header">
+          <div>
+            <h3 class="modal-title">API & Integrations Settings</h3>
+            <p class="modal-subtitle">Configure your Google AI Pro / Gemini API credentials and Notion database connection.</p>
+          </div>
+          <button class="modal-close" id="close-settings-modal">&times;</button>
+        </div>
+        <div class="modal-body">
+          <!-- Google AI Section -->
+          <div class="settings-section">
+            <h4 style="font-size:0.9rem; font-weight:700; color:#60a5fa; margin-bottom:0.5rem;">Google AI Studio & Google AI Pro</h4>
+            <div class="form-group">
+              <label class="form-label" for="api-key-input">Gemini API Key</label>
+              <input type="password" id="api-key-input" class="form-input" placeholder="AIzaSy...">
+              <p class="text-xs text-muted mt-1">
+                With your <strong>Google One AI Premium / Google AI Pro</strong> account, get your developer API key instantly with generous quotas at <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener" style="color:#60a5fa;">aistudio.google.com</a>.
+              </p>
+            </div>
+
+            <div class="form-group mt-3">
+              <label class="form-label" for="model-select">Gemini Model</label>
+              <select id="model-select" class="form-select">
+                <option value="gemini-3.5-flash-lite" selected>Gemini 3.5 Flash Lite (Fastest & Included Free Tier)</option>
+                <option value="gemini-3.5-flash">Gemini 3.5 Flash (Balanced Reasoning & High Speed)</option>
+                <option value="gemini-3.8-flash">Gemini 3.8 Flash (Latest High Intelligence)</option>
+                <option value="gemini-2.5-pro">Gemini 2.5 Pro (Deep Architecture & Analysis)</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Notion Integration Section -->
+          <div class="settings-section mt-3" style="padding-top:1rem; border-top:1px solid var(--border-color);">
+            <h4 style="font-size:0.9rem; font-weight:700; color:#a78bfa; margin-bottom:0.5rem; display:flex; align-items:center; gap:0.4rem;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M4.459 4.208c.746.606 1.026.56 2.428.466l13.215-.793c.28 0 .047-.28-.046-.326L17.86 1.968c-.42-.326-.981-.7-2.055-.607L3.01 2.295c-.466.046-.56.28-.374.466zm.793 3.08v13.904c0 .747.373 1.027 1.213.98l14.523-.84c.84-.046.933-.56.933-1.167V6.354c0-.606-.233-.933-.793-.886l-15.083.886c-.56.047-.793.374-.793.934zm13.996 1.353c.094.42 0 .84-.42.887l-.7.14v8.865c-.56.327-1.12.513-1.633.513-.84 0-1.073-.28-1.727-1.073l-5.086-7.886v7.326l1.493.327c.093.046.14.373.047.746-.14.467-.42.56-1.027.607l-3.36.186c-.093-.047-.046-.42.047-.747l1.027-.233V9.537l-1.307-.14c-.093-.047-.14-.42-.047-.793.14-.467.467-.607 1.027-.654l3.547-.233 5.413 8.353V9.677l-1.307-.14c-.093-.047-.14-.42-.046-.794.14-.466.466-.606 1.073-.653l3.08-.187z"/></svg>
+              Notion Direct Export Integration
+            </h4>
+            <div class="form-group">
+              <label class="form-label" for="notion-token-input">Notion Internal Integration Token</label>
+              <input type="password" id="notion-token-input" class="form-input" placeholder="secret_... or ntn_...">
+              <p class="text-xs text-muted mt-1">
+                Create an integration at <a href="https://www.notion.so/my-integrations" target="_blank" rel="noopener" style="color:#a78bfa;">notion.so/my-integrations</a> to generate a secret token.
+              </p>
+            </div>
+
+            <div class="form-group mt-3">
+              <label class="form-label" for="notion-database-id-input">Notion Target Database ID</label>
+              <input type="text" id="notion-database-id-input" class="form-input" placeholder="e.g. 1a2b3c4d5e6f... or full database URL">
+              <p class="text-xs text-muted mt-1">
+                Copy the 32-character ID from your Notion database URL. <em>Remember to click "•••" > "Connect to" in Notion to grant your integration access to the page/database!</em>
+              </p>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button id="save-settings-btn" class="btn btn-primary">Save Settings</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pre-Persist Notion Sync Loading Modal -->
+    <div id="notion-sync-overlay" class="modal hidden">
+      <div class="modal-backdrop"></div>
+      <div class="modal-dialog text-center" style="max-width: 480px; padding: 2rem;">
+        <div class="notion-sync-icon-pulse" style="font-size: 2.5rem; margin-bottom: 0.75rem;">
+          ❖
+        </div>
+        <h3 id="sync-overlay-title" class="modal-title" style="font-size: 1.25rem; font-weight: 700; color: #f1f5f9;">Persisting to Notion...</h3>
+        <p id="sync-overlay-desc" class="modal-subtitle" style="font-size: 0.85rem; color: #94a3b8; margin-top: 0.25rem;">Creating relational database pages & options before questionnaire begins</p>
+
+        <div class="sync-steps-list" style="margin-top: 1.5rem; text-align: left; background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 1rem;">
+          <div class="sync-step active" id="sync-step-1" style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.75rem; font-size: 0.85rem; color: #cbd5e1;">
+            <span class="sync-step-badge" style="width: 22px; height: 22px; border-radius: 50%; background: #3b82f6; color: white; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 700;">1</span>
+            <span class="step-text">Designing questions & options with Gemini</span>
+          </div>
+          <div class="sync-step" id="sync-step-2" style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.75rem; font-size: 0.85rem; color: #64748b;">
+            <span class="sync-step-badge" style="width: 22px; height: 22px; border-radius: 50%; background: #334155; color: #94a3b8; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 700;">2</span>
+            <span class="step-text">Creating Question Set page in Notion DB</span>
+          </div>
+          <div class="sync-step" id="sync-step-3" style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.75rem; font-size: 0.85rem; color: #64748b;">
+            <span class="sync-step-badge" style="width: 22px; height: 22px; border-radius: 50%; background: #334155; color: #94a3b8; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 700;">3</span>
+            <span class="step-text">Persisting Questions into Notion Questions DB</span>
+          </div>
+          <div class="sync-step" id="sync-step-4" style="display: flex; align-items: center; gap: 0.75rem; font-size: 0.85rem; color: #64748b;">
+            <span class="sync-step-badge" style="width: 22px; height: 22px; border-radius: 50%; background: #334155; color: #94a3b8; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 700;">4</span>
+            <span class="step-text">Linking relational Answer Options & Rollups</span>
+          </div>
+        </div>
+
+        <div class="sync-countdown-box" style="margin-top: 1.5rem; background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.3); border-radius: 8px; padding: 0.75rem 1rem; display: flex; align-items: center; justify-content: space-between;">
+          <span style="font-size: 0.8rem; color: #c4b5fd;">Estimated Ready to Start:</span>
+          <span class="countdown-timer" id="sync-countdown-timer" style="font-family: 'JetBrains Mono', monospace; font-size: 1.1rem; font-weight: 700; color: #a78bfa;">~8s</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
