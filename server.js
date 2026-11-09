@@ -2460,7 +2460,7 @@ RULES:
     return;
   }
 
-  // API endpoint: Create a named snapshot checkpoint in Git
+  // API endpoint: Create a named snapshot checkpoint in Git and automatically push to GitHub
   if (pathname === '/api/version-history/snapshot' && req.method === 'POST') {
     let body = '';
     req.on('data', chunk => { body += chunk; });
@@ -2470,18 +2470,24 @@ RULES:
         const customMessage = (data.message || 'Manual snapshot save state').replace(/"/g, '\\"');
         const commitMsg = `checkpoint: ${customMessage} [${new Date().toLocaleString()}]`;
 
-        exec(`git add . && git commit -m "${commitMsg}"`, { cwd: __dirname }, (err, stdout, stderr) => {
-          if (err && !stdout.includes('nothing to commit')) {
-            res.writeHead(500, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ error: err.message, stderr }));
-            return;
-          }
-          res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({
-            success: true,
-            message: commitMsg,
-            details: stdout || 'No changes to commit (already clean)'
-          }));
+        // 1. Commit changes
+        exec(`git add . && git commit -m "${commitMsg}"`, { cwd: __dirname }, (commitErr, commitStdout) => {
+          // If no changes to commit, still try pushing any unpushed commits
+          const hasCommitted = !commitErr && !commitStdout.includes('nothing to commit');
+
+          // 2. Automatically push to GitHub
+          exec('git push origin main', { cwd: __dirname }, (pushErr, pushStdout, pushStderr) => {
+            const pushSuccess = !pushErr;
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+              success: true,
+              message: commitMsg,
+              pushedToGitHub: pushSuccess,
+              repoUrl: 'https://github.com/artytay/Contexflow',
+              details: commitStdout || 'Working tree clean',
+              pushOutput: pushStdout || (pushErr ? pushStderr : 'Up to date with origin/main')
+            }));
+          });
         });
       } catch (err) {
         res.writeHead(500, { 'Content-Type': 'application/json' });
