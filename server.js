@@ -2,6 +2,7 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { exec } from 'node:child_process';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -2433,6 +2434,55 @@ RULES:
         fs.writeFileSync(notesPath, JSON.stringify(notes, null, 2), 'utf8');
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ success: true, count: notes.length }));
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: err.message }));
+      }
+    });
+    return;
+  }
+
+  // API endpoint: Get Git version history / commits
+  if (pathname === '/api/version-history' && req.method === 'GET') {
+    exec('git log -n 15 --pretty=format:"%h|%an|%ar|%s"', { cwd: __dirname }, (err, stdout) => {
+      if (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: err.message }));
+        return;
+      }
+      const commits = stdout.split('\n').filter(Boolean).map(line => {
+        const [hash, author, date, message] = line.split('|');
+        return { hash, author, date, message };
+      });
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: true, commits }));
+    });
+    return;
+  }
+
+  // API endpoint: Create a named snapshot checkpoint in Git
+  if (pathname === '/api/version-history/snapshot' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', () => {
+      try {
+        const data = JSON.parse(body || '{}');
+        const customMessage = (data.message || 'Manual snapshot save state').replace(/"/g, '\\"');
+        const commitMsg = `checkpoint: ${customMessage} [${new Date().toLocaleString()}]`;
+
+        exec(`git add . && git commit -m "${commitMsg}"`, { cwd: __dirname }, (err, stdout, stderr) => {
+          if (err && !stdout.includes('nothing to commit')) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: err.message, stderr }));
+            return;
+          }
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({
+            success: true,
+            message: commitMsg,
+            details: stdout || 'No changes to commit (already clean)'
+          }));
+        });
       } catch (err) {
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: err.message }));

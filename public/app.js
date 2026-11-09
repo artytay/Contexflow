@@ -130,6 +130,13 @@ const el = {
 
   // History
   historyBtn: document.getElementById('history-btn'),
+  gitSaveStateBtn: document.getElementById('git-save-state-btn'),
+  gitModal: document.getElementById('git-modal'),
+  closeGitModal: document.getElementById('close-git-modal'),
+  gitCheckpointMsgInput: document.getElementById('git-checkpoint-msg-input'),
+  createGitCheckpointBtn: document.getElementById('create-git-checkpoint-btn'),
+  gitCommitsList: document.getElementById('git-commits-list'),
+  refreshGitHistoryBtn: document.getElementById('refresh-git-history-btn'),
   historyCount: document.getElementById('history-count'),
   historyModal: document.getElementById('history-modal'),
   closeHistoryModal: document.getElementById('close-history-modal'),
@@ -215,6 +222,30 @@ const el = {
   payloadModal: document.getElementById('payload-modal'),
   closePayloadModal: document.getElementById('close-payload-modal'),
   payloadPreview: document.getElementById('payload-preview'),
+
+  // Git Save State Modal
+  if (el.gitSaveStateBtn) {
+    el.gitSaveStateBtn.addEventListener('click', () => {
+      if (el.gitModal) {
+        el.gitModal.classList.remove('hidden');
+        loadGitHistory();
+      }
+    });
+  }
+
+  if (el.closeGitModal) {
+    el.closeGitModal.addEventListener('click', () => {
+      if (el.gitModal) el.gitModal.classList.add('hidden');
+    });
+  }
+
+  if (el.createGitCheckpointBtn) {
+    el.createGitCheckpointBtn.addEventListener('click', createGitCheckpoint);
+  }
+
+  if (el.refreshGitHistoryBtn) {
+    el.refreshGitHistoryBtn.addEventListener('click', loadGitHistory);
+  }
 
   // Settings Modal
   settingsBtn: document.getElementById('settings-btn'),
@@ -3690,6 +3721,30 @@ async function persistAndLaunchNotionQuestionSet({ title, description, category,
     });
   }
 
+  // Git Save State Modal
+  if (el.gitSaveStateBtn) {
+    el.gitSaveStateBtn.addEventListener('click', () => {
+      if (el.gitModal) {
+        el.gitModal.classList.remove('hidden');
+        loadGitHistory();
+      }
+    });
+  }
+
+  if (el.closeGitModal) {
+    el.closeGitModal.addEventListener('click', () => {
+      if (el.gitModal) el.gitModal.classList.add('hidden');
+    });
+  }
+
+  if (el.createGitCheckpointBtn) {
+    el.createGitCheckpointBtn.addEventListener('click', createGitCheckpoint);
+  }
+
+  if (el.refreshGitHistoryBtn) {
+    el.refreshGitHistoryBtn.addEventListener('click', loadGitHistory);
+  }
+
   // Settings Modal
   el.settingsBtn.addEventListener('click', () => {
     el.settingsModal.classList.remove('hidden');
@@ -3716,6 +3771,76 @@ async function persistAndLaunchNotionQuestionSet({ title, description, category,
       el.settingsModal.classList.add('hidden');
     }, 800);
   });
+}
+
+// Git Version History & Save States
+async function loadGitHistory() {
+  if (!el.gitCommitsList) return;
+  el.gitCommitsList.innerHTML = '<div style="padding:1rem; text-align:center; color:#94a3b8; font-size:0.8rem;"><span class="spinner-sm"></span> Loading Git commits...</div>';
+
+  try {
+    const res = await fetch('/api/version-history');
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to fetch Git history');
+
+    const commits = data.commits || [];
+    if (!commits.length) {
+      el.gitCommitsList.innerHTML = '<div style="padding:1rem; text-align:center; color:#94a3b8; font-size:0.8rem;">No Git commits found in this repository yet.</div>';
+      return;
+    }
+
+    el.gitCommitsList.innerHTML = '';
+    commits.forEach(c => {
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex; justify-content:space-between; align-items:center; gap:0.75rem; padding:0.6rem 0.85rem; background:rgba(15,23,42,0.4); border:1px solid rgba(255,255,255,0.08); border-radius:6px;';
+      row.innerHTML = `
+        <div style="flex:1; overflow:hidden;">
+          <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.2rem;">
+            <code style="background:rgba(59,130,246,0.2); color:#93c5fd; padding:1px 5px; border-radius:4px; font-size:0.75rem; font-family:monospace;">${escapeHtml(c.hash)}</code>
+            <span style="font-size:0.75rem; color:#94a3b8;">${escapeHtml(c.date)}</span>
+          </div>
+          <div style="font-size:0.85rem; color:#f1f5f9; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+            ${escapeHtml(c.message)}
+          </div>
+        </div>
+      `;
+      el.gitCommitsList.appendChild(row);
+    });
+  } catch (err) {
+    el.gitCommitsList.innerHTML = `<div style="padding:1rem; color:#f87171; font-size:0.8rem;">Error loading Git history: ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+async function createGitCheckpoint() {
+  const msgInput = el.gitCheckpointMsgInput;
+  const msg = msgInput ? msgInput.value.trim() : '';
+  if (!msg) {
+    alert('Please enter a brief description for this save state checkpoint.');
+    return;
+  }
+
+  const origBtnText = el.createGitCheckpointBtn.textContent;
+  el.createGitCheckpointBtn.disabled = true;
+  el.createGitCheckpointBtn.innerHTML = '<span class="spinner-sm"></span> Committing...';
+
+  try {
+    const res = await fetch('/api/version-history/snapshot', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: msg })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to create snapshot');
+
+    if (msgInput) msgInput.value = '';
+    await loadGitHistory();
+    alert(`✓ Save State Created!\n${data.message}`);
+  } catch (err) {
+    alert(`Could not create Git snapshot: ${err.message}`);
+  } finally {
+    el.createGitCheckpointBtn.disabled = false;
+    el.createGitCheckpointBtn.textContent = origBtnText;
+  }
 }
 
 // Render History Modal List
