@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: contexflow
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: NOTION_TOKEN
+        sync: false
+      - key: NOTION_DATABASE_ID
+        sync: false
+      - key: NOTION_VAULT_DATABASE_ID
+        sync: false
+      - key: GITHUB_TOKEN
+        sync: false
